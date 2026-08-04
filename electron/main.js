@@ -62,11 +62,21 @@ function startNextServer(env) {
   if (isDev) {
     // Convenience path for `npm run electron:dev`: run against the Next dev
     // server instead of a standalone build, so UI changes hot-reload.
-    nextProcess = spawn('npx', ['next', 'dev', '--hostname', '127.0.0.1', '--port', port], {
-      cwd: path.join(__dirname, '..'),
-      env: nextEnv,
-      stdio: 'inherit',
-    });
+    //
+    // Resolved and run directly with Node rather than spawn('npx', ...): npx
+    // is npx.cmd on Windows, which plain spawn() cannot execute without
+    // shell:true (and the quoting that comes with it) - require.resolve()
+    // sidesteps PATH and the shell entirely, and works the same on every OS.
+    const nextBin = require.resolve('next/dist/bin/next');
+    nextProcess = spawn(
+      process.execPath,
+      [nextBin, 'dev', '--hostname', '127.0.0.1', '--port', port],
+      {
+        cwd: path.join(__dirname, '..'),
+        env: nextEnv,
+        stdio: 'inherit',
+      },
+    );
   } else {
     const serverPath = path.join(__dirname, '..', '.next', 'standalone', 'server.js');
     nextProcess = spawn(process.execPath, [serverPath], {

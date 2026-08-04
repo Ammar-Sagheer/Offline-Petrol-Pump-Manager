@@ -11,3 +11,7 @@ build/
 # Local dev-only Postgres data directory (mirrors the app-data folder used in
 # production, kept out of git the same way).
 .pgdata/
+
+# Next 16 auto-generates these for AI coding agents on every `next dev` run.
+AGENTS.md
+CLAUDE.md
