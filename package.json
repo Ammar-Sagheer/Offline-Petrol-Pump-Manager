@@ -1,0 +1,34 @@
+{
+  "name": "offline-petrol-pump-manager",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "electron": "electron .",
+    "electron:dev": "cross-env ELECTRON_DEV=true electron .",
+    "dist": "next build && electron-builder"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "embedded-postgres": "^17.5.0-beta.15",
+    "iron-session": "^8.0.4",
+    "jszip": "^3.10.1",
+    "next": "^16.0.0",
+    "pg": "^8.13.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.10.1",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "tailwindcss": "^4.1.0"
+  }
+}

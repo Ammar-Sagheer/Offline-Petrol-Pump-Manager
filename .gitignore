@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+
+# Local dev-only Postgres data directory (mirrors the app-data folder used in
+# production, kept out of git the same way).
+.pgdata/
