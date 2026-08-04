@@ -25,7 +25,15 @@ async function ensureAppUserPassword(superClient, password) {
   // to exist by name for the GRANT statements in that file to succeed). The
   // real, randomly generated password for this install is set here, after
   // migrations run, and is never written into a migration file.
-  await superClient.query('alter role app_user with password $1', [password]);
+  //
+  // ALTER ROLE ... PASSWORD does not accept a bind parameter there - its
+  // grammar takes a plain string literal, not an expression, so `password
+  // $1` is a syntax error regardless of what value is bound. quote_literal()
+  // is asked to escape the password first (a normal parameterized SELECT,
+  // where parameters ARE allowed), and the safely-quoted result is what gets
+  // interpolated into the ALTER ROLE text.
+  const { rows } = await superClient.query('select quote_literal($1) as quoted', [password]);
+  await superClient.query(`alter role app_user with password ${rows[0].quoted}`);
 }
 
 async function appliedMigrations(client) {
