@@ -339,8 +339,13 @@ export async function getProfiles() {
 
 export async function anyProfilesExist() {
   return withUser(null, async (client) => {
-    const result = await one(client, 'select 1 as exists_row from profiles limit 1', [], 'setup state');
-    return result !== null;
+    const result = await one(
+      client,
+      'select any_profiles_exist() as exists_row',
+      [],
+      'setup state',
+    );
+    return Boolean(result?.exists_row);
   });
 }
 
