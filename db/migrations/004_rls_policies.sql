@@ -262,6 +262,7 @@ revoke execute on function public.trg_ledger_append_only()                      
 revoke execute on function public.customer_balance(uuid)                        from public;
 revoke execute on function public.pump_today()                                  from public;
 
+grant execute on function public.current_uid()                        to app_user;
 grant execute on function public.verify_login(text, text)             to app_user;
 grant execute on function public.create_session(uuid, interval)       to app_user;
 grant execute on function public.session_user_id(uuid)                to app_user;
