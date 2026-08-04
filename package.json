@@ -35,9 +35,9 @@
     "appId": "com.pumpmanager.offline",
     "productName": "Pump Manager",
     "asar": false,
+    "includeSubNodeModules": true,
     "files": [
       "electron/**/*",
-      ".next/standalone/**/*",
       "db/migrations/**/*",
       "package.json",
       "!node_modules/**/*",
@@ -57,7 +57,8 @@
       "node_modules/xtend/**/*",
       "node_modules/async-exit-hook/**/*",
       "node_modules/embedded-postgres/**/*",
-      "node_modules/@embedded-postgres/**/*"
+      "node_modules/@embedded-postgres/**/*",
+      ".next/standalone/**/*"
     ],
     "directories": {
       "output": "dist"
