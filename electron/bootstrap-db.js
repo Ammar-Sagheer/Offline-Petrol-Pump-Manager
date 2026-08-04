@@ -14,7 +14,6 @@
  */
 const fs = require('fs');
 const path = require('path');
-const EmbeddedPostgres = require('embedded-postgres');
 const { Client } = require('pg');
 const { dbDataDir, userDataDir, loadOrCreateConfig } = require('./config');
 
@@ -69,6 +68,11 @@ async function runMigrations(client) {
  * should use (as app_user, RLS-restricted) plus a stop() function.
  */
 async function bootstrapDatabase() {
+  // embedded-postgres ships as an ES module, so it cannot be require()'d from
+  // this CommonJS file (Electron's main process). A dynamic import() works
+  // from CommonJS regardless of the target module's own format.
+  const { default: EmbeddedPostgres } = await import('embedded-postgres');
+
   const config = loadOrCreateConfig();
   const dataDir = dbDataDir();
   const firstRun = !fs.existsSync(path.join(dataDir, 'PG_VERSION'));
