@@ -118,14 +118,32 @@ this before assuming a step "just works."
    certificate is configured. Fixed with `win.signAndEditExecutable: false`
    plus `CSC_IDENTITY_AUTO_DISCOVERY=false` (electron-builder's own
    documented escape hatch) on the `dist` script.
+7. **`npm run dist` looked stuck again** after fix #6, sitting at the NSIS
+   build step (`building target=nsis file=...`) with no further output for a
+   long time. Not actually a hang this time - the `files` list included all
+   of `node_modules` (the fix for bug #5), which includes `next`, `react`,
+   Tailwind and everything else, most of it already duplicated inside
+   `.next/standalone` by Next's own dependency tracing. `electron/*.js` only
+   ever directly `require`s two third-party packages at runtime: `pg` and
+   `embedded-postgres`. Computed the real transitive closure for those two
+   from `package-lock.json` programmatically (hand-guessing package names
+   got two of them wrong the first time - see the commit) and trimmed
+   `files` to just that set, cutting the packaged `node_modules` down to
+   ~59MB. Verified the trimmed set is genuinely complete by constructing a
+   real `pg.Client` from a directory copied fully outside the source tree
+   (so Node's module resolution can't cheat by walking up into the
+   project's own `node_modules`) - that's the exact code path
+   `bootstrap-db.js` exercises, and it succeeded.
 
 **Current point in the loop:** waiting on the owner to re-run `npm run dist`
-with fix #6 and report whether the installer completes and the packaged app
-actually launches successfully end-to-end (through setup, to a working
-dashboard). That full path has not yet been confirmed working from a real
-installed `.exe`, only from `electron:dev` (dev-mode, not packaged) and from
-`node .next/standalone/server.js` run directly (not through Electron/the
-installer).
+with fix #7 and report whether the build now completes in reasonable time
+and the packaged app actually launches successfully end-to-end (through
+setup, to a working dashboard). That full path has not yet been confirmed
+working from a real installed `.exe` on Windows - only from `electron:dev`
+(dev-mode, not packaged), from `node .next/standalone/server.js` run
+directly (not through Electron/the installer), and from the packaged Linux
+build tested in this sandbox (which hits an unrelated, sandbox-only failure
+after the point these fixes address - see below).
 
 ## What this sandbox can't test (why bugs keep surfacing on the owner's machine)
 
@@ -162,7 +180,3 @@ steps further in - that's expected, not a sign the previous fix was wrong.
   stock checks, customers, banking, reports, settings) has happened on a
   real running instance yet - once the installer launches cleanly, that's
   the natural next step.
-- `npm run dist`'s `files` list currently includes all of `node_modules`
-  (see bug #5) rather than a trimmed dependency list - correct but produces
-  a larger installer than necessary. Worth revisiting once things are stable,
-  not before.
