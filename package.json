@@ -34,11 +34,13 @@
   "build": {
     "appId": "com.pumpmanager.offline",
     "productName": "Pump Manager",
+    "asar": false,
     "files": [
       "electron/**/*",
       ".next/standalone/**/*",
       "db/migrations/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/**/*"
     ],
     "directories": {
       "output": "dist"
