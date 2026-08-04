@@ -12,6 +12,8 @@ build/
 # production, kept out of git the same way).
 .pgdata/
 
-# Next 16 auto-generates these for AI coding agents on every `next dev` run.
+# AGENTS.md is Next's own auto-generated agent file (disabled via
+# agentRules: false in next.config.mjs, but ignored as a safety net in case
+# that ever lapses). CLAUDE.md is NOT ignored - we maintain our own, see it
+# and PROGRESS.md for the real project record.
 AGENTS.md
-CLAUDE.md
