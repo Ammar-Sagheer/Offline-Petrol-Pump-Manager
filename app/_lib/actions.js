@@ -1319,7 +1319,38 @@ export async function createBackup(_prevState, _formData) {
 
     try {
       await fs.mkdir(backupDir, { recursive: true });
-      await fs.cp(dbDataDir, path.join(backupDir, 'db-data'), { recursive: true });
+      await fs.cp(dbDataDir, path.join(backupDir, 'db-data'), {
+        recursive: true,
+        // postmaster.pid and postmaster.opts describe the RUNNING server, and
+        // a copy taken while it runs necessarily captures them. Postgres then
+        // refuses to start from the restored folder - "lock file
+        // postmaster.pid already exists ... is another postmaster running" -
+        // because it cannot tell a stale pid from a live one. They are
+        // regenerated on every start, so leaving them out costs nothing.
+        filter: (source) => {
+          const name = path.basename(source);
+          return name !== 'postmaster.pid' && name !== 'postmaster.opts';
+        },
+      });
+
+      // config.json goes in the backup too, and this is not optional.
+      //
+      // It holds the randomly generated passwords for this install, and those
+      // same passwords are stored INSIDE the cluster's own catalogue. A fresh
+      // install generates new random ones, so restoring db-data next to a
+      // freshly generated config.json gives a database the app cannot
+      // authenticate against at all ("password authentication failed for user
+      // postgres") - the data is intact and unreachable. Restoring the pair
+      // together is what makes a backup folder self-sufficient.
+      //
+      // That does mean the backup contains credentials, so it is written with
+      // the same 0600 mode as the original. They only guard a database bound
+      // to 127.0.0.1 on this machine, but there is no reason to widen them.
+      await fs.copyFile(
+        path.join(appDataDir, 'config.json'),
+        path.join(backupDir, 'config.json'),
+      );
+      await fs.chmod(path.join(backupDir, 'config.json'), 0o600);
     } finally {
       // Always stop the backup, even if the copy failed, so the server is
       // not left in "backup in progress" mode.
@@ -1332,5 +1363,8 @@ export async function createBackup(_prevState, _formData) {
   }
 
   revalidatePath('/admin/backup');
-  return ok(`Backup saved to ${backupDir}. Copy that folder anywhere you keep backups.`);
+  return ok(
+    `Backup saved to ${backupDir}. Copy that whole folder somewhere safe - it has ` +
+      'everything needed to restore onto another machine.',
+  );
 }

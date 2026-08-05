@@ -206,6 +206,34 @@ this before assuming a step "just works."
      order matters there. **My node_modules trimming in bug #7 is what
      exposed this** - worth remembering that the `files` list is far more
      order- and gate-sensitive than it looks.
+10. **A backup could not actually be restored.** Found by asking the obvious
+    question nobody had asked - "the laptop got wiped, now what?" - and then
+    testing it rather than reasoning about it. Two independent faults, both
+    of which made the folder useless on a different machine:
+    - `createBackup` copied only `db-data`, not `config.json`. Postgres
+      stores its role passwords **inside the cluster**, and `config.json` is
+      the only record of what they are. A fresh install generates new random
+      ones, so a restored `db-data` sat there intact and unreachable:
+      `password authentication failed for user "postgres"`. Now both are
+      copied, and `config.json` keeps its 0600 mode.
+    - A copy taken while the server runs necessarily includes
+      `postmaster.pid` and `postmaster.opts`. Postgres then refuses to start
+      from the restored folder (`lock file "postmaster.pid" already exists
+      ... is another postmaster running`) because it cannot distinguish a
+      stale pid from a live one. Both are now filtered out of the copy; they
+      are regenerated on every start.
+
+    Verified by running the real action through the app, then restoring the
+    resulting folder onto a simulated fresh install (different random
+    passwords in its own `config.json`): Postgres started with no manual
+    fixing, both roles authenticated, and the customers and logins were
+    intact. Restore steps are on the Backup page itself, deliberately -
+    whoever needs them is on a reinstalled machine with no project checkout.
+
+    **Older backups, taken before this fix, contain only `db-data`.** They
+    are recoverable but need the `pg_hba.conf` → `trust` → reset both
+    passwords → restore `pg_hba.conf` dance, which is written up in
+    `README.md`. That path was tested too, and works.
 
 **Current point in the loop:** waiting on the owner to re-run `npm run dist`
 with fix #7 and report whether the build now completes in reasonable time
@@ -256,11 +284,12 @@ steps further in - that's expected, not a sign the previous fix was wrong.
   `brand/`) - it just needs wiring into the `build` config in
   `package.json`. Cosmetic, but it is the last obviously-unfinished thing
   about the packaged app.
-- The Backup screen (`app/admin/backup`) renders, and correctly disables
-  itself with an explanation when not running inside Electron - but the
-  actual `pg_backup_start()`/`pg_backup_stop()` copy has still never been
-  run, since it only works from the packaged app. That is the one feature
-  in the app with no end-to-end verification at all.
+- Backup/restore has now been run end to end (see bug #10) by pointing the
+  app at a hand-built app-data folder rather than waiting for the packaged
+  build - `APP_DATA_DIR`/`DB_DATA_DIR`/`PG_BACKUP_*` are just env vars, so
+  the real `createBackup` action can be exercised from `next start`. Worth
+  remembering as a technique: several "only works in the packaged app"
+  features can be tested this way.
 - No full manual QA pass through every admin screen has happened on a real
   running **Windows** instance yet - once the installer launches cleanly,
   that's the natural next step. (Every screen has now been checked in this

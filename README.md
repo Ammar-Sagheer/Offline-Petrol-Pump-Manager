@@ -71,6 +71,40 @@ If you'd rather have the in-app button instead, it only needs
 `electron/bootstrap-db.js` - the action and the UI are already written and
 already require the owner's password plus typing `RESET`.
 
+## Backups and restoring
+
+**Backup** in the app writes a timestamped folder into `backups/` next to
+your data, containing `db-data/` (the database, copied safely while the app
+keeps running via `pg_backup_start()`/`pg_backup_stop()`) and `config.json`.
+
+**Copy that folder off the laptop.** A backup sitting beside the original is
+lost with the original.
+
+**To restore onto a reinstalled or different computer:**
+
+1. Install the app, open it once so it creates its folders, then close it
+   fully.
+2. In the data folder (the Backup page prints the path), delete `db-data`
+   and `config.json`.
+3. Copy `db-data` and `config.json` from your backup into their place.
+4. Open the app. Everything is back, including the same logins and
+   passwords.
+
+**Both pieces have to travel together.** Postgres stores its passwords
+*inside* the cluster, and `config.json` is the only copy of them. A fresh
+install generates new random ones, so `db-data` restored on its own is
+intact but unreachable - the app fails with
+`password authentication failed for user "postgres"`.
+
+> **If you have an older backup containing only `db-data`** (taken before
+> this was fixed), the data is fine but you'll need to reset the passwords by
+> hand: temporarily set the auth method in `db-data/pg_hba.conf` to `trust`,
+> start Postgres against that folder, `alter role postgres with password
+> '<pgSuperPassword from the new config.json>'` and the same for `app_user`
+> with `appUserPassword`, then restore `pg_hba.conf` and start the app. Also
+> delete `db-data/postmaster.pid` and `postmaster.opts` first - older backups
+> captured those, and Postgres refuses to start from a folder that has them.
+
 ## Who fixed what
 
 Both of us have worked on this branch, and the split is worth knowing when
