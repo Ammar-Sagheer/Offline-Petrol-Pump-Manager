@@ -56,6 +56,11 @@ send that installer directly and it installs over the existing one without
 needing an uninstall first, since Windows/NSIS already handles that for a
 matching app ID regardless of whether auto-update is involved.
 
+> **Note that the releases repo being public means the installer is
+> downloadable by anyone who has the URL** - nothing currently stops a copy
+> running at a second pump. `docs/LICENSING.md` has the design for
+> addressing that, and an honest account of how far it can realistically go.
+
 ## Resetting the data after testing
 
 The web app has an "empty everything" button under Settings. **In the

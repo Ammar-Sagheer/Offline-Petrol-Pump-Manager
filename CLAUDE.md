@@ -15,10 +15,12 @@ Also here:
 - `README.md` - how to run it, how to reset the data, how backup and restore
   work, plus a reusable Next.js-to-Electron packaging guide covering the
   pitfalls this project actually hit.
-- `docs/RESTORE_FROM_BACKUP.md` - a designed-but-unbuilt in-app restore
-  button. Pick this up from a machine where the packaged app can actually be
-  launched and watched; it touches process lifecycle, which does not behave
-  the same in `electron:dev`.
+- `docs/RESTORE_FROM_BACKUP.md` - the in-app restore button: design, the
+  constraints behind it, and what still needs verifying from a packaged
+  install.
+- `docs/LICENSING.md` - design only, not built. How to stop the app being
+  copied to other pumps, and an honest account of what is and isn't
+  achievable for an offline Electron app.
 
 ## What this is
 
