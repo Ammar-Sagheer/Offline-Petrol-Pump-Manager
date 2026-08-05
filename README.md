@@ -96,6 +96,11 @@ install generates new random ones, so `db-data` restored on its own is
 intact but unreachable - the app fails with
 `password authentication failed for user "postgres"`.
 
+Those four steps are manual for now. A restore button inside the app is
+designed but not built - see `docs/RESTORE_FROM_BACKUP.md`, which covers why
+it has to be a native folder picker driven from the Electron main process
+rather than a file upload from a Server Action.
+
 > **If you have an older backup containing only `db-data`** (taken before
 > this was fixed), the data is fine but you'll need to reset the passwords by
 > hand: temporarily set the auth method in `db-data/pg_hba.conf` to `trust`,

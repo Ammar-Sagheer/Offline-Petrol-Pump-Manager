@@ -11,6 +11,15 @@ on the owner's actual Windows machine and how each was fixed, and what's
 still open. This file (CLAUDE.md) is the short orientation; PROGRESS.md is
 the detailed record.
 
+Also here:
+- `README.md` - how to run it, how to reset the data, how backup and restore
+  work, plus a reusable Next.js-to-Electron packaging guide covering the
+  pitfalls this project actually hit.
+- `docs/RESTORE_FROM_BACKUP.md` - a designed-but-unbuilt in-app restore
+  button. Pick this up from a machine where the packaged app can actually be
+  launched and watched; it touches process lifecycle, which does not behave
+  the same in `electron:dev`.
+
 ## What this is
 
 Same app, same business rules, same UI - running entirely on one Windows

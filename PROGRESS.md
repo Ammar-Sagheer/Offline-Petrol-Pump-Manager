@@ -279,6 +279,15 @@ steps further in - that's expected, not a sign the previous fix was wrong.
 
 ## What's not yet done / worth knowing about
 
+- **In-app restore button: designed, not built** -
+  `docs/RESTORE_FROM_BACKUP.md` has the full design, the constraints that
+  force it into the Electron main process rather than a Server Action, the
+  files it touches, and what has to be tested from a real packaged `.exe`.
+  Deliberately left for a session running on the owner's own machine, since
+  it touches process lifecycle (`shutdown()`, `app.relaunch()`) which does
+  not behave the same in `electron:dev` - the same blind spot that produced
+  bugs #5, #6 and #9.
+
 - No app icon configured for electron-builder, so the installer and window
   use the default Electron icon. The artwork exists (`app/icon.png`,
   `brand/`) - it just needs wiring into the `build` config in
