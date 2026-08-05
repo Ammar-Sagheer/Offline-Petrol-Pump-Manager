@@ -1,8 +1,94 @@
 # Offline Petrol Pump Manager
 
-Offline desktop build of a Next.js app, packaged with Electron. See
-`CLAUDE.md` and `PROGRESS.md` for this specific project's architecture and
-history.
+Offline desktop build of the Mubeen Petroleum Service pump-management app
+(`Ammar-Sagheer/Petrol-Pump-Management-Software`), packaged with Electron so
+it runs entirely on one Windows laptop: no internet, no Docker, no Supabase.
+Electron starts a bundled Postgres binary and the Next.js server as child
+processes, both bound to `127.0.0.1` only.
+
+See `CLAUDE.md` for the architecture and the decisions already locked in, and
+`PROGRESS.md` for the full history - what's built, how each piece was
+verified, and the bug log of every real failure hit on actual hardware.
+
+## Running it
+
+```bash
+npm install            # also downloads the platform Postgres binaries
+npm run electron:dev   # fastest loop: Next dev server inside Electron
+npm run electron       # production mode (needs `npm run build` first)
+npm run dist           # build the installer into dist/
+```
+
+First launch creates the Postgres cluster, applies the migrations, and shows
+a **first-run setup screen** to create the owner account - the offline app's
+one deliberate difference from the web version, which relied on the Supabase
+dashboard for that.
+
+## Resetting the data after testing
+
+The web app has an "empty everything" button under Settings. **In the
+packaged desktop app that button does not appear**: it is gated on
+`ALLOW_FULL_RESET`, and `electron/bootstrap-db.js` doesn't pass that variable
+to the Next.js server. The offline equivalent is to delete the database
+folder.
+
+**Find the folder**: open **Backup** in the app - it prints the exact path
+under "Where your data lives". (It varies by how the app was launched, so
+read it there rather than guessing.) Inside it you'll find `db-data/`,
+`config.json`, and any `backups/`.
+
+**To reset**: quit the app completely, delete **`db-data/` only**, and start
+the app again. It rebuilds an empty database and returns to the setup screen.
+
+Leave `config.json` and `backups/` alone - `config.json` holds this install's
+generated passwords and session secret (verified: the app reconnects fine
+with the stored password against a rebuilt cluster), and `backups/` is where
+the Backup screen writes.
+
+**This is a harder reset than the web app's button.** That button keeps
+logins, tanks, capacities and nozzle starting readings, and clears only
+trading data. Deleting the folder wipes everything and re-seeds tanks and
+nozzles at their defaults:
+
+| | Web "empty everything" | Deleting `db-data/` |
+|---|---|---|
+| Readings, credit slips, ledger, deliveries, dips, expenses | cleared | cleared |
+| Customers | cleared | cleared |
+| Logins | **kept** | gone - setup screen returns |
+| Tank capacity / opening stock | **kept** | back to defaults (25,000 / 50,000 L, 0 opening) |
+| Nozzle starting readings | **kept** | **back to 0** |
+| Bank accounts | kept | gone |
+
+> **Before entering your first real day after a folder reset**, set the tank
+> capacities and, most importantly, the **nozzle starting readings** under
+> Settings → Edit nozzle wiring. Leaving them at 0 on a pump whose meters
+> already read (say) 482,910 makes that first day record the meter's entire
+> lifetime as one day of sales, and draws the tank down by hundreds of
+> thousands of litres it never held.
+
+If you'd rather have the in-app button instead, it only needs
+`ALLOW_FULL_RESET: 'true'` added to the env block in
+`electron/bootstrap-db.js` - the action and the UI are already written and
+already require the owner's password plus typing `RESET`.
+
+## Who fixed what
+
+Both of us have worked on this branch, and the split is worth knowing when
+reading the history:
+
+- The port itself - schema, identity/RLS rewrite, the `pg` data layer, the
+  UI sync with the web app - was done by Claude.
+- **The three bugs that stopped the packaged `.exe` from ever starting were
+  found and fixed by `owaisikhan`** (`fix/packaged-app-fails-to-start`,
+  merged here), along with the reusable packaging guide below. Claude's
+  testing had missed all three, because none of them reproduce in dev mode
+  or when running `.next/standalone/server.js` with plain `node` - only the
+  real installed `.exe` shows them. One of them (Pitfall 3) was made worse
+  by Claude's own `node_modules` trimming.
+
+`PROGRESS.md` has the full bug log with attribution and root causes.
+
+---
 
 The section below is written to be reusable: if you're converting a
 **different** Next.js app into an Electron desktop app, read this first. It
