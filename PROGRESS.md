@@ -19,6 +19,15 @@ decisions; the UI was last synced to its commit `1de9266`.
 and no Supabase dashboard to create one from, so the offline app has to be
 able to make the first one itself.
 
+## Collaborators
+
+This is not a solo branch. `owaisikhan` fixed the three bugs that stopped the
+packaged `.exe` from starting (bug #9 below), on
+`fix/packaged-app-fails-to-start`, and added `README.md` - a reusable
+Next.js-to-Electron packaging guide worth reading before touching
+`electron/` or the `build` block in `package.json`. That branch is merged
+into this one. Check for other branches before assuming this one is current.
+
 ## Status: all 8 build tasks complete, currently fixing packaging bugs found on real hardware
 
 The app runs. The owner has gotten as far as: install → first-run setup →
@@ -170,6 +179,33 @@ this before assuming a step "just works."
    is the other one to watch (pg returns it as a string to protect
    precision); the app mostly wraps those in `Number()` already, but it has
    not been audited column by column.
+9. **The packaged `.exe` installed and launched, but the window never
+   appeared - it timed out after 30s waiting for a server that never
+   started.** Found and fixed by `owaisikhan` on
+   `fix/packaged-app-fails-to-start` (merged here). Three compounding
+   causes, none reproducible from `electron:dev` or from running
+   `.next/standalone/server.js` with plain `node` - which is exactly why my
+   own testing missed all three:
+   - `spawn(process.execPath, [serverPath])` needs `ELECTRON_RUN_AS_NODE=1`.
+     `process.execPath` is the Electron binary; without that flag a packaged
+     `.exe` (whose entry point is baked in) just relaunches the whole app
+     recursively instead of running `server.js`.
+   - `stdio: 'inherit'` is unsafe in a packaged Windows app: it is a
+     GUI-subsystem executable with no console, so the main process's own
+     stdout/stderr are not valid handles to hand a child. Now piped to
+     `next-server.log` in the app-data folder, and startup races against the
+     child dying so a crash surfaces immediately with the log tail instead
+     of after a blind 30s wait.
+   - electron-builder treats **any** directory named `node_modules`, nested
+     or not, as a hard gate evaluated before individual file patterns - so
+     it silently deleted `.next/standalone/node_modules` (Next's own bundle
+     of next/react/etc for the standalone server) despite
+     `.next/standalone/**/*` being listed. Fixed with
+     `includeSubNodeModules: true`, and by moving `.next/standalone/**/*`
+     after the `!node_modules/**/*` negation in the `files` list, since
+     order matters there. **My node_modules trimming in bug #7 is what
+     exposed this** - worth remembering that the `files` list is far more
+     order- and gate-sensitive than it looks.
 
 **Current point in the loop:** waiting on the owner to re-run `npm run dist`
 with fix #7 and report whether the build now completes in reasonable time
@@ -220,16 +256,54 @@ steps further in - that's expected, not a sign the previous fix was wrong.
   `brand/`) - it just needs wiring into the `build` config in
   `package.json`. Cosmetic, but it is the last obviously-unfinished thing
   about the packaged app.
-- The Backup screen (`app/admin/backup`) has never been exercised against a
-  packaged app - the `pg_backup_start()`/`pg_backup_stop()` logic was
-  verified as valid Postgres usage but not run end-to-end from the UI.
-- Screens verified by screenshot so far: dashboard, purchases, settings,
-  account (plus the delivery / nozzle / staff-login dialogs). **Not yet
-  screenshotted: readings, stock-checks, customers, customer detail,
-  banking, reports, backup.** Given bug #8 was a data-shape mismatch that
-  only showed up visually, those screens are worth a pass with realistic
-  data before trusting them - particularly anything showing a date or a
-  `numeric` column.
+- The Backup screen (`app/admin/backup`) renders, and correctly disables
+  itself with an explanation when not running inside Electron - but the
+  actual `pg_backup_start()`/`pg_backup_stop()` copy has still never been
+  run, since it only works from the packaged app. That is the one feature
+  in the app with no end-to-end verification at all.
 - No full manual QA pass through every admin screen has happened on a real
-  running Windows instance yet - once the installer launches cleanly,
-  that's the natural next step.
+  running **Windows** instance yet - once the installer launches cleanly,
+  that's the natural next step. (Every screen has now been checked in this
+  sandbox - see the QA pass below - but that is the web UI against Linux
+  Postgres, not the packaged Windows app.)
+- `npm run dist` cannot be completed **for the Linux target** in this
+  sandbox: electron-builder fails with
+  `ENOENT ... stat 'libecpg.so.6.17'` on the relative symlinks inside
+  `@embedded-postgres/linux-x64`. Windows is unaffected (that package ships
+  `.dll`s, no symlinks) and has packaged successfully, so this is a
+  sandbox-only limitation, not a bug to fix.
+
+## Full UI QA pass (every screen, in this sandbox)
+
+Done after the design sync, against a real Postgres instance seeded through
+the **actual RPCs and triggers** (6 days of readings across all 6 nozzles
+via `create_nozzle_reading`, credit slips auto-posting to the ledger, a
+customer payment, stock dips, deliveries, expenses, two bank accounts and a
+payment through `record_bank_payment`).
+
+Every admin screen screenshotted at 1440 / 1152 / 400px and inspected:
+dashboard, readings, purchases, stock-checks, customers, customer detail
+(ledger), new customer, banking, reports, settings, account, backup, plus
+the delivery / nozzle-wiring / staff-login dialogs and the collapsed
+password section. Each capture was also asserted against raw
+`Date.toString()` leaking through, `[object Object]`, `undefined`/`NaN`, a
+Next error boundary, and page-level horizontal overflow. **All clean.**
+
+Arithmetic was checked against the seed rather than just eyeballed:
+- Banking: 1,500,000 opening + 670,000 in − 380,000 out = 1,790,000 shown. ✓
+- Customer ledger: 6 credit slips (3 × 40L @ 274.00 + 3 × 40L @ 278.25 =
+  66,270) − 30,000 payment = 36,270 shown. ✓ Confirms the credit-sale →
+  ledger trigger and the append-only payment path both work end to end.
+- Stock: seeded dips of −140 / +60 show as exactly that gain/loss. ✓
+
+Also verified:
+- **Role enforcement**: a `data_entry` login sees only its four nav
+  sections, gets no owner-only actions, and is *redirected away* from
+  `/admin/reports` rather than shown it.
+- **The monthly Excel export**, which had never been run: downloads a real
+  16KB xlsx (valid ZIP magic, `pump-report-2026-08.xlsx`), 10 sheets,
+  charts intact, figures matching the Reports page exactly.
+
+What this pass does **not** cover: writing through the UI (every mutation
+path was exercised via SQL/RPC, not by filling in forms and submitting), and
+anything Windows- or Electron-specific.
