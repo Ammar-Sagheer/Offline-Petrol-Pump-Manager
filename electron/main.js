@@ -19,9 +19,9 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const { bootstrapDatabase } = require('./bootstrap-db');
-const { loadOrCreateConfig, userDataDir } = require('./config');
+const { loadOrCreateConfig, userDataDir, dbDataDir, configPath } = require('./config');
 
 const isDev = process.env.ELECTRON_DEV === 'true';
 
@@ -29,6 +29,58 @@ const isDev = process.env.ELECTRON_DEV === 'true';
 // app's ready event, and this module is require()'d well before that.
 function getServerLogPath() {
   return path.join(userDataDir(), 'next-server.log');
+}
+
+function getUpdateLogPath() {
+  return path.join(userDataDir(), 'update.log');
+}
+
+/**
+ * Checks Ammar-Sagheer/Pump-manager-releases (a public repo holding nothing
+ * but built installers - the app's own source stays private) for a newer
+ * version, downloads it in the background if one exists, and asks before
+ * installing rather than doing it out from under someone mid-shift.
+ *
+ * Every failure mode here has to be silent-but-logged, never a dialog the
+ * owner has to dismiss: this app is built to run with no internet
+ * dependency, so "no connection right now" is an expected, routine outcome
+ * of this check, not an error worth interrupting anyone over.
+ */
+function checkForUpdates() {
+  if (!app.isPackaged) return; // no app-update.yml in a dev/unpacked run
+
+  // Required lazily, not at module top-level: destructuring autoUpdater
+  // triggers its constructor immediately (it reads app.getVersion()), and
+  // this module is require()'d well before app.whenReady() - same reasoning
+  // as getServerLogPath() above.
+  const { autoUpdater } = require('electron-updater');
+
+  const logStream = fs.createWriteStream(getUpdateLogPath(), { flags: 'a' });
+  const log = (line) => logStream.write(`${new Date().toISOString()} ${line}\n`);
+  autoUpdater.logger = { info: log, warn: log, error: log, debug: () => {} };
+
+  autoUpdater.on('error', (error) => {
+    log(`error: ${error.message}`);
+  });
+
+  autoUpdater.on('update-downloaded', async (info) => {
+    log(`downloaded: ${info.version}`);
+    // mainWindow may have been closed while the download was in progress -
+    // showMessageBox works window-independent when passed undefined instead.
+    const { response } = await dialog.showMessageBox(mainWindow ?? undefined, {
+      type: 'info',
+      buttons: ['Restart now', 'Later'],
+      defaultId: 0,
+      title: 'Update ready',
+      message: `Pump Manager ${info.version} has been downloaded.`,
+      detail: 'Restart now to install it, or keep working - it installs automatically the next time the app closes.',
+    });
+    if (response === 0) autoUpdater.quitAndInstall();
+  });
+
+  autoUpdater.checkForUpdates().catch((error) => {
+    log(`check failed: ${error.message}`);
+  });
 }
 
 let mainWindow;
@@ -166,10 +218,13 @@ async function createWindow(env) {
     width: 1280,
     height: 800,
     webPreferences: {
-      // The renderer only ever loads our own local server - no need for
-      // Node integration or a preload script in the page itself.
+      // contextIsolation/nodeIntegration stay as they are for every page the
+      // renderer loads - the preload adds exactly one function (restoring a
+      // backup - see preload.js and performRestore() below), not general
+      // Node access.
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -190,11 +245,174 @@ async function shutdown() {
   }
 }
 
+/**
+ * Where the pre-restore data goes: one fixed slot, not a new timestamped one
+ * per restore. Only ever holds what was live immediately before the most
+ * recent restore - restoring again overwrites it, on purpose. It is a single
+ * undo step, not a history.
+ */
+function replacedDir() {
+  return path.join(userDataDir(), 'replaced');
+}
+
+/**
+ * Restores db-data and config.json from a backup folder - see
+ * docs/RESTORE_FROM_BACKUP.md for the full reasoning. Runs entirely here,
+ * not in the Next.js child, because it has to stop and replace the very
+ * database that child is running against (Decision 2 in that doc).
+ *
+ * Called with no argument for the folder-picker case (a new/wiped machine);
+ * called with a path for restoring one of the in-app backup list's own
+ * entries, or with replacedDir() itself to undo the most recent restore -
+ * see "Undoing a restore" below for why that last case needs its own step.
+ *
+ * ORDERING NOTE, differs from the doc's sketch: shutdown() runs BEFORE the
+ * snapshot rename, not after. Postgres holds files open inside db-data while
+ * it runs, and Windows refuses to rename a directory that has open handles
+ * inside it - renaming it live first (as the doc originally sketched) fails
+ * on the one platform this app actually ships on.
+ */
+async function performRestore(sourcePath) {
+  let folder = sourcePath;
+
+  if (!folder) {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose the backup folder to restore',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { ok: false, message: 'Cancelled.' };
+    }
+    folder = result.filePaths[0];
+  }
+
+  // Validate before touching anything live. Someone picking the wrong folder
+  // is the likeliest failure, not a corrupt backup, and it should say so
+  // plainly rather than fail halfway through something destructive.
+  if (!fs.existsSync(path.join(folder, 'db-data', 'PG_VERSION'))) {
+    return {
+      ok: false,
+      message: `That does not look like a backup folder - no db-data/PG_VERSION found in ${folder}.`,
+    };
+  }
+
+  let sourceConfig;
+  try {
+    sourceConfig = JSON.parse(fs.readFileSync(path.join(folder, 'config.json'), 'utf8'));
+  } catch {
+    return {
+      ok: false,
+      message: `That folder is missing a readable config.json - cannot restore from ${folder}.`,
+    };
+  }
+  const requiredKeys = ['pgPort', 'appUserPassword', 'sessionSecret'];
+  const missingKeys = requiredKeys.filter((key) => !(key in sourceConfig));
+  if (missingKeys.length > 0) {
+    return {
+      ok: false,
+      message:
+        `config.json in that folder is missing ${missingKeys.join(', ')} - ` +
+        'this looks like an incomplete or very old backup.',
+    };
+  }
+
+  const liveDbData = dbDataDir();
+  const liveConfigPath = configPath();
+  const slot = replacedDir();
+  const slotDbData = path.join(slot, 'db-data');
+  const slotConfigPath = path.join(slot, 'config.json');
+
+  // Undoing a restore means restoring FROM the slot the CURRENT restore is
+  // about to overwrite - the normal sequence below can't run as-is, because
+  // by the time it clears the slot to hold the new snapshot, the very data
+  // it needs to copy into live would already be gone. Copy it out to a
+  // scratch location first in that one case; every other restore reads
+  // directly from its own folder, untouched by any of this.
+  const isUndo = path.resolve(folder) === path.resolve(slot);
+  const stagingDir = isUndo ? `${slot}.staging` : null;
+  const sourceDbData = isUndo ? path.join(stagingDir, 'db-data') : path.join(folder, 'db-data');
+  const sourceConfigPath = isUndo ? path.join(stagingDir, 'config.json') : path.join(folder, 'config.json');
+
+  if (isUndo) {
+    await fs.promises.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+    await fs.promises.cp(slot, stagingDir, { recursive: true });
+  }
+
+  // From here on we are committed: shutdown() is about to stop Postgres, so
+  // every path out of this function - success or failure - ends in a
+  // relaunch. There is no version of "stop the database, then just return an
+  // error to a page whose server just lost its database" that leaves the app
+  // in a working state.
+  let failureMessage = null;
+  try {
+    await shutdown();
+
+    // Snapshot what is there now, before overwriting it - moved into the one
+    // fixed slot, not deleted, so a copy failure below still has a way back,
+    // and the Backup page can offer "undo this restore" afterwards either
+    // way. Single slot: whatever was here from an earlier restore is gone
+    // once this one commits - it is one undo step, not a history.
+    await fs.promises.rm(slot, { recursive: true, force: true });
+    await fs.promises.mkdir(slot, { recursive: true });
+    await fs.promises.rename(liveDbData, slotDbData);
+    await fs.promises.rename(liveConfigPath, slotConfigPath);
+
+    await fs.promises.cp(sourceDbData, liveDbData, {
+      recursive: true,
+      // Same reason createBackup() excludes these going out: they describe a
+      // running server, and an older or foreign backup might still carry
+      // them. Postgres refuses to start from a folder that has one.
+      filter: (source) => {
+        const name = path.basename(source);
+        return name !== 'postmaster.pid' && name !== 'postmaster.opts';
+      },
+    });
+    await fs.promises.copyFile(sourceConfigPath, liveConfigPath);
+    await fs.promises.chmod(liveConfigPath, 0o600);
+  } catch (error) {
+    failureMessage = error.message;
+
+    // Put back whatever was moved aside. Best-effort and defensive about
+    // exactly how far the sequence got - the failure could be the very first
+    // rename or partway through the copy.
+    await fs.promises.rm(liveDbData, { recursive: true, force: true }).catch(() => {});
+    await fs.promises.rm(liveConfigPath, { force: true }).catch(() => {});
+    if (fs.existsSync(slotDbData)) {
+      await fs.promises.rename(slotDbData, liveDbData).catch(() => {});
+    }
+    if (fs.existsSync(slotConfigPath)) {
+      await fs.promises.rename(slotConfigPath, liveConfigPath).catch(() => {});
+    }
+  } finally {
+    if (stagingDir) {
+      await fs.promises.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  // A clean restart re-runs bootstrapDatabase() against whichever data is
+  // actually in place now, reads the matching config.json, and spawns the
+  // Next server with the matching credentials - simpler and far more
+  // predictable than trying to re-wire the already-running app.
+  app.relaunch();
+  app.exit(0);
+
+  return failureMessage
+    ? { ok: false, message: `Restore failed and was rolled back: ${failureMessage}` }
+    : { ok: true, message: 'Restored. Relaunching...' };
+}
+
+ipcMain.handle('restore-from-backup', (_event, sourcePath) => performRestore(sourcePath));
+
 app.whenReady().then(async () => {
   try {
     const { env, stop } = await bootstrapDatabase();
     stopDatabase = stop;
     await createWindow(env);
+
+    // Delayed, and never awaited here - checking for an update is strictly
+    // best-effort background work that must never slow down or block a
+    // normal launch.
+    setTimeout(checkForUpdates, 10_000);
   } catch (error) {
     console.error('[startup] failed:', error);
     dialog.showErrorBox(

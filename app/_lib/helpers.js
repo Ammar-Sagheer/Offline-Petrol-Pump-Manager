@@ -142,6 +142,12 @@ export function formatNumber(value) {
  */
 export { todayISO, shiftISODate, formatDate, monthRange, formatMonth } from './date-helpers';
 
+/*
+ * Same arrangement for the formatters the client forms also need - see
+ * format-helpers.js.
+ */
+export { formatRate } from './format-helpers';
+
 /**
  * Whether the "empty everything" button exists on this build.
  *

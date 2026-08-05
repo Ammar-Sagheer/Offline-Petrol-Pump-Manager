@@ -24,6 +24,38 @@ a **first-run setup screen** to create the owner account - the offline app's
 one deliberate difference from the web version, which relied on the Supabase
 dashboard for that.
 
+## Releasing an update
+
+Installed copies check `Ammar-Sagheer/Pump-manager-releases` (a public repo
+holding nothing but built installers - this repo, with the actual source,
+stays private) for a newer version about 10 seconds after launch, download
+it in the background if one exists, and ask before installing - "Restart
+now" installs immediately, "Later" installs automatically the next time the
+app is closed either way. No internet at launch is a completely normal,
+silent no-op, not an error - this app has no internet dependency for daily
+use, and the check is pure background best-effort on top of that.
+
+**To publish one:**
+
+1. Bump `"version"` in `package.json` - electron-updater compares this
+   against what is already installed, so a build without a version bump is
+   invisible to it.
+2. Set a GitHub personal access token (`repo` scope, or a fine-grained token
+   scoped to just the releases repo) as `GH_TOKEN` in your own shell - this
+   never ships in the app, only used here, on your machine, to publish:
+   ```powershell
+   $env:GH_TOKEN = "your-token-here"
+   ```
+3. `npm run release` - builds exactly like `npm run dist`, then uploads the
+   installer and its update metadata to the releases repo as a new GitHub
+   Release.
+
+If you'd rather not use auto-update for a particular build (or a client
+without internet access), `npm run dist` still works exactly as before -
+send that installer directly and it installs over the existing one without
+needing an uninstall first, since Windows/NSIS already handles that for a
+matching app ID regardless of whether auto-update is involved.
+
 ## Resetting the data after testing
 
 The web app has an "empty everything" button under Settings. **In the
@@ -80,7 +112,27 @@ keeps running via `pg_backup_start()`/`pg_backup_stop()`) and `config.json`.
 **Copy that folder off the laptop.** A backup sitting beside the original is
 lost with the original.
 
-**To restore onto a reinstalled or different computer:**
+**To restore, from inside the app:** the Backup page has a Restore button
+next to each previous backup (undoing a bad day's entry), plus a "Choose a
+backup folder to restore" button for a reinstalled or different computer.
+The **sign-in screen** also has a "Restore from a backup instead" link, for
+a machine that already carries some account (yours or a placeholder set up
+ahead of time) whose password you don't know - only a typed confirmation is
+asked there, since there's no session yet to check a password against - the
+other entry points ask for both your password and a typed confirmation.
+Whichever one you use, it hands off to Electron's main process, which
+snapshots what is currently there (kept on
+the Backup page as "replaced on \<date\>", with its own **Undo this
+restore** button if you picked the wrong thing, until you delete it - this
+is one undo step, not a history, so restoring again replaces it), stops the
+app, copies the backup into place, and restarts. Sign back in with the
+**password from the backup**, not whatever you set up on the fresh install -
+the logins come from the backup too. See `docs/RESTORE_FROM_BACKUP.md` for
+the full design and why it has to be a native folder picker driven from the
+Electron main process rather than a file upload from a Server Action.
+
+**To restore by hand** (outside the app, or if you're not running the
+packaged build):
 
 1. Install the app, open it once so it creates its folders, then close it
    fully.
@@ -95,11 +147,6 @@ lost with the original.
 install generates new random ones, so `db-data` restored on its own is
 intact but unreachable - the app fails with
 `password authentication failed for user "postgres"`.
-
-Those four steps are manual for now. A restore button inside the app is
-designed but not built - see `docs/RESTORE_FROM_BACKUP.md`, which covers why
-it has to be a native folder picker driven from the Electron main process
-rather than a file upload from a Server Action.
 
 > **If you have an older backup containing only `db-data`** (taken before
 > this was fixed), the data is fine but you'll need to reset the passwords by

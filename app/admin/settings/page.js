@@ -1,4 +1,10 @@
-import { requirePageRole, ROLES, formatDate, formatPKR, fullResetAllowed } from '@/app/_lib/helpers';
+import {
+  requirePageRole,
+  ROLES,
+  formatDate,
+  formatRate,
+  fullResetAllowed,
+} from '@/app/_lib/helpers';
 import { getTanks, getNozzles, getFuelPrices, getCurrentRates } from '@/app/_lib/data-service';
 import PageHeader from '@/app/_components/ui/PageHeader';
 import FuelBadge from '@/app/_components/ui/FuelBadge';
@@ -6,6 +12,7 @@ import FuelPriceForm from '@/app/_components/admin/FuelPriceForm';
 import TankForm from '@/app/_components/admin/TankForm';
 import NozzleSettingsButton from '@/app/_components/admin/NozzleSettingsButton';
 import FullResetPanel from '@/app/_components/admin/FullResetPanel';
+import DeleteFuelPriceButton from '@/app/_components/admin/DeleteFuelPriceButton';
 
 export const metadata = { title: 'Settings' };
 
@@ -48,7 +55,7 @@ export default async function SettingsPage() {
                   {rates[fuelType] === null ? (
                     <span className="text-base font-semibold text-amber-700">Not set</span>
                   ) : (
-                    `${formatPKR(rates[fuelType])} / L`
+                    `${formatRate(rates[fuelType])} / L`
                   )}
                 </p>
               </div>
@@ -63,6 +70,9 @@ export default async function SettingsPage() {
                     <th className="th">Fuel</th>
                     <th className="th">In force from</th>
                     <th className="th text-right">Rate</th>
+                    <th className="th">
+                      <span className="sr-only">Remove</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
@@ -72,7 +82,13 @@ export default async function SettingsPage() {
                         <FuelBadge fuelType={price.fuel_type} />
                       </td>
                       <td className="td">{formatDate(price.effective_from)}</td>
-                      <td className="td-num font-semibold">{formatPKR(price.rate)}</td>
+                      <td className="td-num font-semibold">{formatRate(price.rate)}</td>
+                      <td className="td text-right">
+                        <DeleteFuelPriceButton
+                          priceId={price.id}
+                          summary={`the ${price.fuel_type} rate of ${formatRate(price.rate)} from ${formatDate(price.effective_from)}`}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

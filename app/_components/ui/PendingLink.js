@@ -2,6 +2,8 @@
 
 import Link, { useLinkStatus } from 'next/link';
 
+import Spinner from '@/app/_components/ui/Spinner';
+
 /**
  * A link that says it is working.
  *
@@ -13,15 +15,6 @@ import Link, { useLinkStatus } from 'next/link';
  * useLinkStatus reports the pending state of the enclosing Link, so the
  * indicator has to live in a child component - that is the hook's contract.
  */
-function Spinner({ className = '' }) {
-  return (
-    <span
-      role="status"
-      aria-label="Loading"
-      className={`inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent ${className}`}
-    />
-  );
-}
 
 /** Swaps the label for a spinner while the navigation is in flight. */
 function LinkBody({ children, spinnerOnly }) {

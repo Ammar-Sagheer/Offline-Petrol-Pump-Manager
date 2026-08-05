@@ -1,9 +1,11 @@
 # Restore from a backup, from inside the app
 
-**Status: designed, not built.** This is a handoff document for whoever picks
-this up - ideally in a session running on the owner's actual Windows machine,
-where the packaged app can be launched and watched. Nothing here has been
-implemented; the file paths and function names below are real and current.
+**Status: built, not yet verified against a packaged install.** Everything
+below is implemented as described, with one deliberate deviation from the
+original sketch (see "Ordering fix" under the restore sequence) and the two
+open questions below resolved. What still needs doing is exactly what
+"Testing this properly" always said it would: running it from a real
+installed `.exe`, which needs a session on the owner's actual machine.
 
 ## The problem this solves
 
@@ -109,7 +111,7 @@ In `electron/main.js`, roughly:
    - Fail with a clear message naming what was missing. Someone picking the
      wrong folder is the likeliest failure, not a corrupt backup.
 4. **Snapshot what is there now, before overwriting it.** Rename the live
-   `db-data` and `config.json` aside (e.g. `db-data.replaced-<stamp>`) rather
+   `db-data` and `config.json` into a single fixed `replaced/` folder rather
    than deleting them. If the restore fails halfway, this is the only way
    back. **This step is not optional** - the whole operation is "overwrite
    the real data with something from a USB drive", and the failure mode is
@@ -128,6 +130,18 @@ In `electron/main.js`, roughly:
 8. On any failure after step 4: put the snapshot back, then report. The user
    should end up either fully restored or exactly where they started, never
    in between.
+
+**Ordering fix from the original sketch.** Implemented with step 5
+(`shutdown()`) moved *before* step 4 (the snapshot rename), not after.
+Postgres holds files open inside `db-data` while it runs, and Windows
+refuses to rename a directory that has open handles inside it - renaming it
+live first, as originally sketched, fails on the one platform this app
+actually ships on. `shutdown()` now always runs exactly once, unconditionally,
+the moment validation passes - which also means every path out of
+`performRestore()` after that point, success or failure, ends in
+`app.relaunch()`. There is no version of "stop the database, then just
+return an error to a page whose server just lost its database" that leaves
+the app in a working state.
 
 ## Safety
 
@@ -154,13 +168,14 @@ from the backup**, not whatever they had set up on the fresh install. The
 
 | File | Change |
 |---|---|
-| `electron/main.js` | `ipcMain.handle('restore-from-backup')`, the sequence above, `preload` in `webPreferences` |
+| `electron/main.js` | `ipcMain.handle('restore-from-backup')`, `performRestore()`, `preload` in `webPreferences` |
 | `electron/preload.js` | new - the one-function context bridge |
-| `electron/config.js` | already exports `userDataDir()`, `dbDataDir()`, `configPath()` - no change expected |
-| `app/admin/backup/page.js` | replace the written-out restore steps with the button (keep them as a fallback for anyone not inside Electron) |
-| `app/_components/admin/RestoreButton.js` | new - dialog, password + typed confirmation, then `window.pumpManager.restoreFromBackup()` |
-| `app/_lib/actions.js` | new action that verifies the owner's password before the handoff |
-| `README.md` | update the restore section once the button exists |
+| `electron/config.js` | unchanged - `userDataDir()`, `dbDataDir()`, `configPath()` already exported everything needed |
+| `app/admin/backup/page.js` | lists replaced snapshots; restore button per backup row plus the standalone folder-picker button, which keeps the written-out steps as its fallback content |
+| `app/_components/admin/RestoreButton.js` | new - dialog, password + typed confirmation, then `window.pumpManager.restoreFromBackup(sourcePath)`; shared by both entry points |
+| `app/_components/admin/DeleteReplacedSnapshotButton.js` | new - same confirm-then-delete pattern as `DeleteFuelPriceButton.js` |
+| `app/_lib/actions.js` | `confirmRestore` (verifies the owner before the handoff) and `deleteReplacedSnapshot` |
+| `README.md` | restore section updated to describe the in-app button, manual steps kept as the outside-Electron fallback |
 
 ## Testing this properly
 
@@ -185,19 +200,65 @@ without a packaged build by pointing `APP_DATA_DIR`, `DB_DATA_DIR` and
 and *copy* logic here can be exercised the same way. The process
 lifecycle - `shutdown()`, `app.relaunch()` - cannot.
 
-## Open questions for whoever builds this
+## Open questions - resolved
 
-- **Keep the snapshot, or delete it after a successful restore?** Keeping it
-  is safer and costs disk (the database is the biggest thing in the folder).
-  Suggestion: keep it, surface it on the Backup page as
-  "replaced on <date>", let the owner delete it deliberately.
-- **Restore from the in-app list too?** The Backup page already lists
-  `backups/<timestamp>/` folders. Restoring one of those with a click - no
-  file dialog at all - is the more common case (undoing a bad day's entry),
-  while the folder picker covers the new-machine case. Both use the same
-  main-process sequence.
-- **Should the reset button come back at the same time?** `reset_all_data()`
-  exists and is fully wired, gated on `ALLOW_FULL_RESET`, which
-  `electron/bootstrap-db.js` never passes. It was deliberately left off
-  (see `README.md`), but "restore" and "reset" are neighbours conceptually
-  and the owner asked about both. Worth deciding together rather than twice.
+- **Keep the snapshot, or delete it after a successful restore?** Kept, but
+  revised after building it once: not a growing `db-data.replaced-<stamp>` /
+  `config.json.replaced-<stamp>` pair per restore, but a single fixed
+  `replaced/` folder (`replacedDir()` in `electron/main.js`) that the next
+  restore simply overwrites. One undo step, not a history - the actual
+  history of backups already lives in `backups/`. Surfaced on the Backup
+  page as "replaced on <date>", with both an **Undo this restore** button
+  (see below) and a Delete action (`DeleteReplacedSnapshotButton.js`,
+  `deleteReplacedSnapshot` in `actions.js`, no longer needs a stamp - there's
+  only ever the one folder).
+- **Restore from the in-app list too?** Yes - all four entry points (backup
+  list, folder picker on the Backup page, undo, and a folder picker on the
+  sign-in screen for a new machine or a placeholder account) call the same
+  `performRestore()` sequence with a different `sourcePath`. `RestoreButton.js`
+  is the one component behind all four.
+
+### A fourth entry point: restoring before signing in at all
+
+`/admin/login` only renders when `anyProfilesExist()` is true - a brand new
+install with zero accounts redirects to `/admin/setup` instead. So a machine
+that already carries *some* account (a placeholder created ahead of time
+before handing the laptop to whoever is migrating, or simply a second
+attempt on the same machine) shows the sign-in form, not setup - and that
+person may have no idea what that placeholder's password even is, only the
+password from their real backup.
+
+`RestoreButton` there is used with `requireOwnerPassword={false}`: no
+session exists yet to check a password against, so it drops that field and
+the `confirmRestore` Server Action round-trip entirely, keeping only the
+typed `RESTORE` word as a speed bump against an accidental click - the same
+role FullResetPanel says typing serves for `RESET`. This does not weaken
+anything: physical access to the machine is already the actual trust
+boundary here, same as it is for the manual fallback steps (delete
+`db-data`/`config.json` by hand) that sit right next to this button on the
+Backup page.
+- **Should the reset button come back at the same time?** Left as-is
+  (still gated on `ALLOW_FULL_RESET`, still off by default) - out of scope
+  for this change, worth its own decision rather than bundling it in here.
+
+### Undoing a restore - added after the first pass
+
+The first version kept a snapshot but never actually wired up a way to
+restore *from* it - only a Delete button. That's a real gap: picking the
+wrong folder, with no button to undo it, means the only way back is a
+*second* restore, and if the owner doesn't have another good backup handy,
+there is no way back at all. `RestoreButton.js`'s "Undo this restore" now
+passes `replacedDir()`'s path as `sourcePath`, going through the exact same
+confirmation (password + typed word) and `performRestore()` sequence as any
+other restore.
+
+This introduces one real wrinkle: undoing means restoring FROM the very slot
+the restore is about to overwrite. `performRestore()` detects this case
+(`sourcePath` resolves to `replacedDir()`) and copies that folder to a
+`.staging` scratch location *before* doing anything else - otherwise the
+"clear the slot to hold the new snapshot" step would delete the data it
+still needs to read. Every other restore (backup list, folder picker) skips
+this entirely and reads directly from its own folder. Verified this handles
+being undone repeatedly (undo, then undo the undo, then undo that) without
+losing data or leaving a stray `.staging` folder behind - see
+`single-slot-and-undo.js` in the testing notes below.

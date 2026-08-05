@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useActionState } from 'react';
+import { useActionState } from "react";
 
-import { signIn } from '@/app/_lib/actions';
-import SubmitButton from '@/app/_components/ui/SubmitButton';
-import FormMessage from '@/app/_components/ui/FormMessage';
+import { signIn } from "@/app/_lib/actions";
+import SubmitButton from "@/app/_components/ui/SubmitButton";
+import FormMessage from "@/app/_components/ui/FormMessage";
 
-export default function LoginForm({ next = '' }) {
+export default function LoginForm({ next = "" }) {
   const [state, formAction] = useActionState(signIn, null);
 
   return (
@@ -15,7 +15,7 @@ export default function LoginForm({ next = '' }) {
 
       <div>
         <label className="label" htmlFor="email">
-          Email
+          Email:
         </label>
         <input
           id="email"

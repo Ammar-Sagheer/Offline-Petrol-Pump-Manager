@@ -8,12 +8,14 @@ import FormMessage from '@/app/_components/ui/FormMessage';
 import FuelBadge from '@/app/_components/ui/FuelBadge';
 import NumberInput from '@/app/_components/ui/NumberInput';
 import ReadingChainWarning from '@/app/_components/admin/ReadingChainWarning';
+import { formatRate } from '@/app/_lib/format-helpers';
 import Dialog from '@/app/_components/ui/Dialog';
 
 /*
  * Formatting is done inline here rather than imported from helpers.js: that
  * module reaches into request cookies for the role checks, so it cannot be
- * pulled into a browser bundle.
+ * pulled into a browser bundle. Anything the server needs to format the same
+ * way lives in format-helpers.js instead - see formatRate above.
  */
 const litreFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 const moneyFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -110,7 +112,7 @@ export default function ReadingForm({ row, date, customers, creditSales, canDele
             />
             <RowFigure
               label="Today’s rate"
-              value={row.rate ? `Rs ${row.rate} / litre` : 'Not set'}
+              value={row.rate ? `${formatRate(row.rate)} / litre` : 'Not set'}
               tone={row.rate ? undefined : 'warn'}
             />
             <div className="col-span-2 self-center text-xs text-ink-500 sm:col-span-2">
@@ -355,7 +357,7 @@ function EntryForm({ row, date, customers }) {
 
       {rate > 0 ? (
         <p className="text-xs text-ink-500">
-          Rate: <span className="tabular font-semibold text-ink-700">Rs {rate}</span> per litre
+          Rate: <span className="tabular font-semibold text-ink-700">{formatRate(rate)}</span> per litre
         </p>
       ) : (
         <p className="text-sm font-medium text-amber-800">

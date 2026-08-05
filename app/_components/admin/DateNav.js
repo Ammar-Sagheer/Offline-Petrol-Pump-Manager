@@ -1,18 +1,15 @@
 import PendingLink from '@/app/_components/ui/PendingLink';
+import DateJump from '@/app/_components/admin/DateJump';
 
 import { todayISO, shiftISODate, formatDate } from '@/app/_lib/date-helpers';
 
 /**
  * Previous / next day, a date box, and a way back to today.
  *
- * The form is a plain GET, so it still works before JavaScript has loaded -
- * which on a slow connection in a pump office is a real scenario.
- *
- * Note the `key` on the date input. It is uncontrolled, so React will not push
- * a new defaultValue into a field that is already on screen: stepping through
- * days with the arrows changed the page underneath while the box carried on
- * showing the old date. Keying it by the date remounts it, so what it displays
- * is always the day being shown.
+ * The date box lives in DateJump because it needs to be a Client Component to
+ * navigate the moment a date is picked; everything else here stays on the
+ * server. See that file for why picking a date is enough on its own and what
+ * the old Go button was costing.
  *
  * Anything passed as children joins the end of the button row. A page-level
  * action for the day on screen belongs on the same line as the day's controls,
@@ -58,22 +55,7 @@ export default function DateNav({
           <span aria-hidden="true">‹</span>
         </PendingLink>
 
-        <form method="GET" action={basePath} className="flex items-center gap-2">
-          <label className="sr-only" htmlFor="date-nav">
-            Date
-          </label>
-          <input
-            key={date}
-            id="date-nav"
-            type="date"
-            name={paramName}
-            defaultValue={date}
-            className="input py-2"
-          />
-          <button type="submit" className="btn-secondary">
-            Go
-          </button>
-        </form>
+        <DateJump date={date} basePath={basePath} paramName={paramName} />
 
         <PendingLink
           href={`${basePath}?${paramName}=${nextDate}`}

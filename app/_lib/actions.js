@@ -29,6 +29,7 @@ import {
   landingPageFor,
   fullResetAllowed,
   formatLitres,
+  formatRate,
 } from './helpers';
 
 // ---------------------------------------------------------------------------
@@ -451,7 +452,7 @@ export async function createPurchase(_prevState, formData) {
   const tankId = text(formData, 'tank_id');
   const purchaseDate = text(formData, 'purchase_date');
   const quantity = number(formData, 'quantity_litres');
-  const rate = number(formData, 'rate');
+  const totalCost = number(formData, 'total_cost');
   const supplierName = text(formData, 'supplier_name');
   const invoiceNumber = text(formData, 'invoice_number');
   const paymentStatus = text(formData, 'payment_status') || 'pending';
@@ -459,7 +460,7 @@ export async function createPurchase(_prevState, formData) {
   if (!tankId) return fail('Choose which tank the fuel went into.');
   if (!purchaseDate) return fail('Enter the delivery date.');
   if (quantity === null || quantity <= 0) return fail('Enter how many litres were delivered.');
-  if (rate === null || rate <= 0) return fail('Enter the rate per litre.');
+  if (totalCost === null || totalCost <= 0) return fail('Enter the amount on the delivery note.');
   if (!supplierName) return fail('Enter the supplier or OMC name.');
   if (!['paid', 'pending'].includes(paymentStatus)) return fail('Invalid payment status.');
 
@@ -467,9 +468,11 @@ export async function createPurchase(_prevState, formData) {
     await withUser(profile.id, (client) =>
       client.query(
         `insert into fuel_purchases
-           (tank_id, purchase_date, quantity_litres, rate, supplier_name, invoice_number, payment_status, created_by)
+           (tank_id, purchase_date, quantity_litres, total_cost, supplier_name, invoice_number, payment_status, created_by)
          values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [tankId, purchaseDate, quantity, rate, supplierName, invoiceNumber || null, paymentStatus, profile.id],
+        // The amount on the note is what gets stored; the rate per litre is a
+        // generated column derived from it - see migration 011.
+        [tankId, purchaseDate, quantity, roundMoney(totalCost), supplierName, invoiceNumber || null, paymentStatus, profile.id],
       ),
     );
   } catch (error) {
@@ -755,7 +758,46 @@ export async function setFuelPrice(_prevState, formData) {
 
   revalidatePath('/admin/settings');
   revalidatePath('/admin/readings');
-  return ok(`${fuelType === 'petrol' ? 'Petrol' : 'Diesel'} rate set to Rs ${rate} per litre.`);
+  return ok(`${fuelType === 'petrol' ? 'Petrol' : 'Diesel'} rate set to ${formatRate(rate)} per litre.`);
+}
+
+/**
+ * Removes a rate. Owner only, and the only way to correct a mistyped one.
+ *
+ * A fuel and a date can carry one rate, enforced by a unique constraint - so
+ * typing 339.48 when you meant 393.48 cannot be fixed by saving again over the
+ * top. Without this the wrong price stands for the whole day and every reading
+ * entered against it is wrong.
+ *
+ * WHAT IT DOES NOT UNDO. Readings already saved keep the rate they were sold
+ * at - a copy sits on the reading row itself, which is what stops a later price
+ * change quietly rewriting last week's takings. So removing a rate fixes what
+ * is entered from here on and leaves what is already entered alone; those days
+ * have to be cleared and re-entered. The button says so before it acts.
+ */
+export async function deleteFuelPrice(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const priceId = text(formData, 'price_id');
+  if (!priceId) return fail('Missing the rate.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query('delete from fuel_prices where id = $1', [priceId]),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not remove the rate.'));
+  }
+
+  revalidatePath('/admin/settings');
+  revalidatePath('/admin/readings');
+  revalidatePath('/admin');
+  return ok('Rate removed. Set the correct one now.');
 }
 
 export async function updateTank(_prevState, formData) {
@@ -828,7 +870,21 @@ export async function updateTank(_prevState, formData) {
   return ok('Tank updated.');
 }
 
-export async function setNozzleTank(_prevState, formData) {
+/**
+ * All six nozzles at once - how the pump is plumbed, saved as one thing.
+ *
+ * Describing the wiring is a single job done once when the pump goes onto the
+ * system, so it gets one button rather than six. The rows arrive as three
+ * parallel lists because a form serialises repeated field names in the order
+ * they appear in the markup, which is what lines index 2 of one list up with
+ * index 2 of the next.
+ *
+ * Everything is validated before anything is sent: a half-valid submission
+ * should be refused whole, not applied as far as the first bad row. The write
+ * itself is one UPDATE inside set_nozzle_wiring() for the same reason - see
+ * migration 012.
+ */
+export async function setNozzleWiring(_prevState, formData) {
   let profile;
   try {
     profile = await requireRole(ROLES.SUPER_ADMIN);
@@ -836,46 +892,54 @@ export async function setNozzleTank(_prevState, formData) {
     return fail(error.message);
   }
 
-  const nozzleId = text(formData, 'nozzle_id');
-  const tankId = text(formData, 'tank_id');
-  const startingReading = number(formData, 'starting_reading');
+  const ids = formData.getAll('nozzle_id').map((value) => String(value));
+  const tankIds = formData.getAll('tank_id').map((value) => String(value));
+  const readings = formData.getAll('starting_reading').map((value) => String(value));
 
-  if (!nozzleId || !tankId) return fail('Missing the nozzle or tank.');
-  if (startingReading === null) return fail('Enter the meter reading this nozzle starts from.');
-  if (startingReading < 0) return fail('A meter reading cannot be negative.');
+  if (ids.length === 0) return fail('Nothing to save.');
+  if (ids.length !== tankIds.length || ids.length !== readings.length) {
+    return fail('That form arrived incomplete. Reopen it and try again.');
+  }
 
-  try {
-    // Compare against what is stored before writing. The button already
-    // refuses to submit an unchanged row, but that is a claim made by the
-    // browser; this is the one made by the database.
-    const changed = await withUser(profile.id, async (client) => {
-      const { rows } = await client.query(
-        'select tank_id, starting_reading from nozzles where id = $1',
-        [nozzleId],
-      );
-      const current = rows[0];
-      if (!current) throw new Error('Could not read the nozzle.');
+  const rows = [];
+  for (let index = 0; index < ids.length; index += 1) {
+    const startingReading = Number(readings[index]);
 
-      if (current.tank_id === tankId && Number(current.starting_reading) === startingReading) {
-        return false;
-      }
+    if (!ids[index] || !tankIds[index]) {
+      return fail('Every nozzle needs a tank. Check the list and try again.');
+    }
+    if (readings[index].trim() === '' || !Number.isFinite(startingReading)) {
+      return fail('Every nozzle needs a starting meter reading, even if it is 0.');
+    }
+    if (startingReading < 0) {
+      return fail('A meter reading cannot be negative.');
+    }
 
-      await client.query('update nozzles set tank_id = $1, starting_reading = $2 where id = $3', [
-        tankId,
-        startingReading,
-        nozzleId,
-      ]);
-      return true;
+    rows.push({
+      nozzle_id: ids[index],
+      tank_id: tankIds[index],
+      starting_reading: roundMoney(startingReading),
     });
+  }
 
-    if (!changed) return ok('No change - this nozzle already reads that way.');
+  let saved;
+  try {
+    saved = await withUser(profile.id, async (client) => {
+      const { rows: result } = await client.query('select set_nozzle_wiring($1::jsonb) as count', [
+        JSON.stringify(rows),
+      ]);
+      return result[0].count;
+    });
   } catch (error) {
-    return fail(describe(error, 'Could not update the nozzle.'));
+    return fail(describe(error, 'Could not save the nozzle wiring.'));
   }
 
   revalidatePath('/admin/settings');
   revalidatePath('/admin/readings');
-  return ok('Nozzle updated.');
+  revalidatePath('/admin');
+
+  const count = Number(saved ?? rows.length);
+  return ok(`Saved. ${count} ${count === 1 ? 'nozzle' : 'nozzles'} updated.`);
 }
 
 export async function createExpense(_prevState, formData) {
@@ -1367,4 +1431,78 @@ export async function createBackup(_prevState, _formData) {
     `Backup saved to ${backupDir}. Copy that whole folder somewhere safe - it has ` +
       'everything needed to restore onto another machine.',
   );
+}
+
+// ---------------------------------------------------------------------------
+// Restore - see docs/RESTORE_FROM_BACKUP.md for the full design.
+//
+// The restore itself cannot happen here. It means stopping and replacing the
+// very database this Server Action just authenticated against - a Server
+// Action runs inside the Next.js child process, and doing that to itself
+// would mean trying to return a response to a page whose server no longer
+// exists. That part runs in Electron's main process (electron/main.js,
+// performRestore()) instead, reached over the one-function IPC bridge in
+// electron/preload.js.
+//
+// What belongs here is the part that DOES need the database: checking the
+// owner is who they say they are, before the thing that could answer that
+// question goes away. Confirm first, hand off second - never the other way
+// around.
+// ---------------------------------------------------------------------------
+
+export async function confirmRestore(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const password = String(formData.get('owner_password') ?? '');
+  const confirmation = text(formData, 'confirmation');
+
+  if (confirmation !== 'RESTORE') return fail('Type RESTORE in capitals to confirm.');
+  if (!password) return fail('Enter your own password to confirm.');
+
+  const passwordOk = await withUser(null, async (client) => {
+    const { rows } = await client.query('select * from verify_login($1, $2)', [
+      profile.email,
+      password,
+    ]);
+    return Boolean(rows[0]);
+  });
+
+  if (!passwordOk) return fail('That is not your password. Nothing has been restored.');
+
+  return ok('Confirmed.');
+}
+
+/**
+ * The previous restore's pre-restore data, moved aside rather than deleted
+ * (performRestore()'s replacedDir() in electron/main.js) - "replaced on
+ * <date>" on the Backup page, with its own Undo (restore from it, handled
+ * the same as any other restore) and Delete action.
+ *
+ * One fixed folder, not a name derived from anything the client sends - it
+ * is always exactly `${APP_DATA_DIR}/replaced`, which is what keeps this
+ * from being pointed anywhere else.
+ */
+export async function deleteReplacedSnapshot(_prevState, _formData) {
+  try {
+    await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const appDataDir = process.env.APP_DATA_DIR;
+  if (!appDataDir) return fail('Only available inside the desktop app.');
+
+  try {
+    await fs.rm(path.join(appDataDir, 'replaced'), { recursive: true, force: true });
+  } catch (error) {
+    return fail(describe(error, 'Could not delete that snapshot.'));
+  }
+
+  revalidatePath('/admin/backup');
+  return ok('Deleted.');
 }

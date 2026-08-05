@@ -9,8 +9,8 @@ import Toast from '@/app/_components/ui/Toast';
 import Dialog from '@/app/_components/ui/Dialog';
 import { todayISO } from '@/app/_lib/date-helpers';
 import NumberInput from '@/app/_components/ui/NumberInput';
+import { formatRate } from '@/app/_lib/format-helpers';
 
-const moneyFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const litreFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
 /**
@@ -32,7 +32,7 @@ export default function PurchaseForm({ tanks }) {
   const [state, formAction] = useActionState(createPurchase, null);
 
   const [quantity, setQuantity] = useState('');
-  const [rate, setRate] = useState('');
+  const [totalCost, setTotalCost] = useState('');
   const [tankId, setTankId] = useState('');
 
   // Close once it has gone through, and carry the confirmation out with it -
@@ -48,13 +48,18 @@ export default function PurchaseForm({ tanks }) {
       setNotice({ message: state.message });
       formRef.current?.reset();
       setQuantity('');
-      setRate('');
+      setTotalCost('');
       setTankId('');
     }
   }, [state]);
 
-  const totalCost = Number(quantity) * Number(rate);
-  const showTotal = Number.isFinite(totalCost) && totalCost > 0;
+  // The rate is worked out from what was typed, not typed in - it is a
+  // generated column in the database for the same reason (migration 023). The
+  // delivery note states litres and an amount; the rate is arithmetic on those.
+  const litresTyped = Number(quantity);
+  const totalTyped = Number(totalCost);
+  const derivedRate = litresTyped > 0 ? totalTyped / litresTyped : null;
+  const showRate = Number.isFinite(derivedRate) && derivedRate > 0;
 
   const today = todayISO();
 
@@ -160,17 +165,17 @@ export default function PurchaseForm({ tanks }) {
               />
             </div>
             <div>
-              <label className="label" htmlFor="rate">
-                Rate / litre
+              <label className="label" htmlFor="total_cost">
+                Invoice total
               </label>
               <NumberInput
-                id="rate"
-                name="rate"
+                id="total_cost"
+                name="total_cost"
                 step="0.01"
                 min="0.01"
                 required
-                value={rate}
-                onChange={(event) => setRate(event.target.value)}
+                value={totalCost}
+                onChange={(event) => setTotalCost(event.target.value)}
                 className="input-number"
                 placeholder="0.00"
               />
@@ -188,13 +193,13 @@ export default function PurchaseForm({ tanks }) {
             </p>
           ) : null}
 
-          {showTotal ? (
+          {showRate ? (
             <p className="rounded-lg bg-ink-900 px-4 py-3 text-white">
               <span className="text-xs font-medium uppercase tracking-wide text-ink-300">
-                Invoice total
+                Works out at
               </span>
               <span className="tabular mt-0.5 block text-xl font-bold">
-                Rs {moneyFormat.format(totalCost)}
+                {formatRate(derivedRate)} <span className="text-base font-semibold">/ litre</span>
               </span>
             </p>
           ) : null}

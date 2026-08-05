@@ -1,4 +1,11 @@
-import { requirePageRole, ROLES, formatDate, formatLitres, formatPKR } from '@/app/_lib/helpers';
+import {
+  requirePageRole,
+  ROLES,
+  formatDate,
+  formatLitres,
+  formatPKR,
+  formatRate,
+} from '@/app/_lib/helpers';
 import { getPurchases, getTanks } from '@/app/_lib/data-service';
 import PageHeader from '@/app/_components/ui/PageHeader';
 import EmptyState from '@/app/_components/ui/EmptyState';
@@ -79,7 +86,7 @@ export default async function PurchasesPage() {
                       ) : null}
                     </td>
                     <td className="td-num">{formatLitres(purchase.quantity_litres)}</td>
-                    <td className="td-num">{formatPKR(purchase.rate)}</td>
+                    <td className="td-num">{formatRate(purchase.rate)}</td>
                     <td className="td-num font-semibold">{formatPKR(purchase.total_cost)}</td>
                     <td className="td">
                       {isOwner ? (

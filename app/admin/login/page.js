@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import LoginForm from '@/app/_components/admin/LoginForm';
+import RestoreButton from '@/app/_components/admin/RestoreButton';
 import BrandMark from '@/app/_components/ui/BrandMark';
 import { BUSINESS_NAME } from '@/app/_lib/brand';
 import { anyProfilesExist } from '@/app/_lib/data-service';
@@ -36,6 +37,20 @@ export default async function LoginPage({ searchParams }) {
       </div>
 
       <LoginForm next={next} />
+
+      {/* Shifting to a new machine, or this one already carries someone
+          else's account (a placeholder created before handing the laptop
+          over), lands here rather than /admin/setup - there is no session
+          yet to check a password against, so RestoreButton asks only for
+          the typed word. See the note on requireOwnerPassword in
+          RestoreButton.js for why that is an acceptable trade here. */}
+      <div className="mt-4 border-t border-ink-200 pt-4 text-center">
+        <RestoreButton
+          label="Restore from a backup instead"
+          compact
+          requireOwnerPassword={false}
+        />
+      </div>
     </div>
   );
 }
