@@ -8,7 +8,16 @@ Branch: `claude/offline-petrol-pump-desktop-8ktct0` on
 `Ammar-Sagheer/Offline-Petrol-Pump-Manager`.
 
 Reference repo (read-only, do not push to it):
-`Ammar-Sagheer/Petrol-Pump-Management-Software`, `main` branch.
+`Ammar-Sagheer/Petrol-Pump-Management-Software`, `main` branch. **It now has
+its own `CLAUDE.md`, `docs/UI_CONVENTIONS.md` and `docs/CHANGELOG.md` - read
+those before any UI work here.** The offline app is meant to be visually and
+behaviourally identical to it, so its design decisions are this repo's design
+decisions; the UI was last synced to its commit `1de9266`.
+
+**The one deliberate UI difference:** the login page redirects to
+`/admin/setup` when no profile exists. A reset database has no owner account
+and no Supabase dashboard to create one from, so the offline app has to be
+able to make the first one itself.
 
 ## Status: all 8 build tasks complete, currently fixing packaging bugs found on real hardware
 
@@ -134,6 +143,33 @@ this before assuming a step "just works."
    (so Node's module resolution can't cheat by walking up into the
    project's own `node_modules`) - that's the exact code path
    `bootstrap-db.js` exercises, and it succeeded.
+8. **Every date in the app rendered as
+   `Mon Aug 03 2026 00:00:00 GMT+0000 (Coordinated Universal Time)`.** Found
+   by screenshotting the UI during the design sync, not by any test - the
+   build was clean and nothing threw. Supabase returned DATE columns over
+   JSON as `'YYYY-MM-DD'` strings, which is what `formatDate()` in
+   `date-helpers.js` was written against (it slices the first 10 characters
+   and splits on `-`). The `pg` driver instead parses DATE into a JS `Date`,
+   and `String(thatDate)` slices to `'Mon Aug 03'`, which splits to nothing
+   numeric, so formatDate fell through to printing the whole thing. The same
+   mismatch silently left every `<input type="date">` blank (Settings' tank
+   opening-stock dates), and the oversized date column pushed the Purchases
+   table's Supplier column into wrapping across three lines - a second,
+   purely visual symptom whose real cause was this. Fixed at the driver
+   boundary in `app/_lib/db.js` with
+   `types.setTypeParser(types.builtins.DATE, (v) => v)`, restoring the
+   string contract the ~37 date-column usages across the UI already assume,
+   rather than teaching each of them a second possible shape. `timestamptz`
+   (`created_at`) is deliberately left as a `Date`: it is a real instant,
+   and its one usage only compares two of them.
+
+   **Worth generalising from:** this is the class of bug the Supabase →
+   `pg` port is most likely to still be hiding - places where PostgREST's
+   JSON serialisation and the `pg` driver's type parsing disagree about a
+   column's JavaScript shape, with no error raised either way. `numeric`
+   is the other one to watch (pg returns it as a string to protect
+   precision); the app mostly wraps those in `Number()` already, but it has
+   not been audited column by column.
 
 **Current point in the loop:** waiting on the owner to re-run `npm run dist`
 with fix #7 and report whether the build now completes in reasonable time
@@ -153,6 +189,16 @@ as root. That has meant:
   everything Electron-shaped was verified either via Xvfb + `--no-sandbox`
   (a root-only workaround) or by testing the underlying Node/Postgres logic
   directly and trusting the wiring.
+- **The web UI itself, however, CAN be tested here properly**, and should be.
+  Playwright plus the pre-installed Chromium
+  (`executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'`,
+  launch with `--no-sandbox`, never run `playwright install`) drives the app
+  against a real Postgres instance fine. That is how bug #8 was found, and it
+  would not have been found any other way - the build was clean and nothing
+  threw. Screenshot at 1440/1152/400px with realistic fixture data, per the
+  reference repo's `docs/UI_CONVENTIONS.md`. Install Playwright with
+  `npm install --no-save playwright` and keep the throwaway script out of
+  git, the same way that repo treats `app/devcheck/`.
 - Nothing Windows-specific has ever been tested here (`npx.cmd` resolution,
   `signtool.exe`/certificate store behavior, NSIS installer behavior,
   Windows path handling). Every Windows-only bug in the log above was found
@@ -169,14 +215,21 @@ steps further in - that's expected, not a sign the previous fix was wrong.
 
 ## What's not yet done / worth knowing about
 
-- No `logo.png` in `public/` - `BrandMark` falls back to initials gracefully,
-  cosmetic only.
-- No app icon configured for electron-builder (uses the default Electron
-  icon) - cosmetic, low priority.
+- No app icon configured for electron-builder, so the installer and window
+  use the default Electron icon. The artwork exists (`app/icon.png`,
+  `brand/`) - it just needs wiring into the `build` config in
+  `package.json`. Cosmetic, but it is the last obviously-unfinished thing
+  about the packaged app.
 - The Backup screen (`app/admin/backup`) has never been exercised against a
   packaged app - the `pg_backup_start()`/`pg_backup_stop()` logic was
   verified as valid Postgres usage but not run end-to-end from the UI.
-- No full manual QA pass through every admin screen (readings, purchases,
-  stock checks, customers, banking, reports, settings) has happened on a
-  real running instance yet - once the installer launches cleanly, that's
-  the natural next step.
+- Screens verified by screenshot so far: dashboard, purchases, settings,
+  account (plus the delivery / nozzle / staff-login dialogs). **Not yet
+  screenshotted: readings, stock-checks, customers, customer detail,
+  banking, reports, backup.** Given bug #8 was a data-shape mismatch that
+  only showed up visually, those screens are worth a pass with realistic
+  data before trusting them - particularly anything showing a date or a
+  `numeric` column.
+- No full manual QA pass through every admin screen has happened on a real
+  running Windows instance yet - once the installer launches cleanly,
+  that's the natural next step.
