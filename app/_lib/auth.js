@@ -19,21 +19,21 @@
  * only ever runs on 127.0.0.1, http, in Electron's own Chromium view - there
  * is no network hop for a `secure` flag to protect against.
  */
-import 'server-only';
-import { cookies } from 'next/headers';
-import { sealData, unsealData } from 'iron-session';
-import { withSystem } from './db';
+import "server-only";
+import { cookies } from "next/headers";
+import { sealData, unsealData } from "iron-session";
+import { withSystem } from "./db";
 
-const COOKIE_NAME = 'pump_session';
+const COOKIE_NAME = "pump_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 function sessionSecret() {
   const secret = process.env.SESSION_SECRET;
   if (!secret || secret.length < 32) {
     throw new Error(
-      'SESSION_SECRET is not set (or is too short). electron/bootstrap-db.js generates one ' +
-        'on first run and passes it to the Next.js child process - if you are running ' +
-        '`next dev` directly, add a 32+ character SESSION_SECRET to .env.local.',
+      "SESSION_SECRET is not set (or is too short). electron/bootstrap-db.js generates one " +
+        "on first run and passes it to the Next.js child process - if you are running " +
+        "`next dev` directly, add a 32+ character SESSION_SECRET to .env.local.",
     );
   }
   return secret;
@@ -62,10 +62,10 @@ async function writeSessionCookie(sessionId) {
   );
   jar.set(COOKIE_NAME, sealed, {
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: "lax",
     secure: false,
     maxAge: SESSION_TTL_SECONDS,
-    path: '/',
+    path: "/",
   });
 }
 
@@ -77,14 +77,19 @@ async function writeSessionCookie(sessionId) {
  */
 export async function login(email, password) {
   const profile = await withSystem(async (client) => {
-    const { rows } = await client.query('select * from verify_login($1, $2)', [email, password]);
+    const { rows } = await client.query("select * from verify_login($1, $2)", [
+      email,
+      password,
+    ]);
     return rows[0] ?? null;
   });
 
   if (!profile) return null;
 
   const sessionId = await withSystem(async (client) => {
-    const { rows } = await client.query('select create_session($1) as id', [profile.id]);
+    const { rows } = await client.query("select create_session($1) as id", [
+      profile?.id,
+    ]);
     return rows[0].id;
   });
 
@@ -97,7 +102,9 @@ export async function login(email, password) {
 export async function logout() {
   const sessionId = await readSessionId();
   if (sessionId) {
-    await withSystem((client) => client.query('select delete_session($1)', [sessionId]));
+    await withSystem((client) =>
+      client.query("select delete_session($1)", [sessionId]),
+    );
   }
   const jar = await cookies();
   jar.delete(COOKIE_NAME);
@@ -118,16 +125,20 @@ export async function getSessionProfile() {
   if (!sessionId) return null;
 
   return withSystem(async (client) => {
-    const { rows: sessionRows } = await client.query('select session_user_id($1) as user_id', [
-      sessionId,
-    ]);
+    const { rows: sessionRows } = await client.query(
+      "select session_user_id($1) as user_id",
+      [sessionId],
+    );
     const userId = sessionRows[0]?.user_id;
     if (!userId) return null;
 
-    await client.query('select set_config($1, $2, true)', ['app.current_user_id', userId]);
+    await client.query("select set_config($1, $2, true)", [
+      "app.current_user_id",
+      userId,
+    ]);
 
     const { rows } = await client.query(
-      'select id, email, full_name, role, is_active from profiles where id = $1',
+      "select id, email, full_name, role, is_active from profiles where id = $1",
       [userId],
     );
     const profile = rows[0];
