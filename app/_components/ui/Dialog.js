@@ -12,8 +12,12 @@ import { useEffect, useRef } from 'react';
  * On a phone it fills the screen as a sheet, which is the pattern people expect
  * there and avoids the cramped, floating-box feel a centred modal has on a
  * small display.
+ *
+ * `size="lg"` widens the desktop dialog for content that does not fit the
+ * default 32rem without scrolling sideways inside it - a table, mainly. Phones
+ * are unaffected either way; the sheet already fills the screen.
  */
-export default function Dialog({ open, onClose, title, subtitle, children }) {
+export default function Dialog({ open, onClose, title, subtitle, size = 'md', children }) {
   const dialogRef = useRef(null);
 
   useEffect(() => {
@@ -57,9 +61,13 @@ export default function Dialog({ open, onClose, title, subtitle, children }) {
         // itself, so this only fires when the click missed the content.
         if (event.target === dialogRef.current) dialogRef.current.close();
       }}
-      className="m-0 max-h-none w-full max-w-none bg-transparent p-0
+      className={`m-0 max-h-none w-full max-w-none bg-transparent p-0
                  backdrop:bg-ink-900/50
-                 sm:m-auto sm:max-h-[90dvh] sm:w-[min(32rem,calc(100vw-2rem))]"
+                 sm:m-auto sm:max-h-[90dvh] ${
+                   size === 'lg'
+                     ? 'sm:w-[min(48rem,calc(100vw-2rem))]'
+                     : 'sm:w-[min(32rem,calc(100vw-2rem))]'
+                 }`}
     >
       <div
         className="flex h-dvh w-full flex-col bg-white

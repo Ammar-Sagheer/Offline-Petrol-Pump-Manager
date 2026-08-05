@@ -799,15 +799,12 @@ export async function updateTank(_prevState, formData) {
       const current = rows[0];
       if (!current) throw new Error('Could not read the tank.');
 
-      const currentDate =
-        current.opening_stock_date instanceof Date
-          ? current.opening_stock_date.toISOString().slice(0, 10)
-          : String(current.opening_stock_date);
-
+      // DATE columns come back as 'YYYY-MM-DD' strings - see the type parser
+      // in db.js - so this compares like with like.
       if (
         Number(current.capacity_litres) === capacity &&
         Number(current.opening_stock_litres) === openingStock &&
-        currentDate === openingStockDate
+        current.opening_stock_date === openingStockDate
       ) {
         return false;
       }

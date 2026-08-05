@@ -12,7 +12,32 @@
  * cookie - see auth.js for that half.
  */
 import 'server-only';
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
+
+/*
+ * Hand back DATE columns as the plain 'YYYY-MM-DD' string Postgres stores,
+ * not as a JavaScript Date.
+ *
+ * Supabase returned these over JSON, so they arrived as strings, and every
+ * component and helper in the reference app was written against that -
+ * formatDate() slices the first 10 characters and splits on '-'. The `pg`
+ * driver instead parses a DATE into a Date object, and String(thatDate) is
+ * 'Mon Aug 03 2026 00:00:00 GMT+0000 (...)', which slices to 'Mon Aug 03',
+ * splits to nothing numeric, and falls through to printing the whole thing.
+ * Every date in the app rendered that way.
+ *
+ * Fixing it here rather than in formatDate() keeps the contract the ~37
+ * date-column usages across the UI already assume, instead of teaching each
+ * of them about a second possible shape.
+ *
+ * A Date is also the wrong type for these on principle: `reading_date` and
+ * friends are calendar days with no time and no zone, and turning them into
+ * an instant is what re-introduces the midnight/timezone drift that
+ * date-helpers.js exists to avoid. timestamptz (created_at) is deliberately
+ * left as a Date - it is a real instant, and the one place it is used only
+ * compares two of them.
+ */
+types.setTypeParser(types.builtins.DATE, (value) => value);
 
 let pool;
 
