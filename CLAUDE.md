@@ -21,6 +21,10 @@ Also here:
 - `docs/LICENSING.md` - design only, not built. How to stop the app being
   copied to other pumps, and an honest account of what is and isn't
   achievable for an offline Electron app.
+- `docs/LICENSING_PLAN.md` - the agreed spec built from that design: signed
+  Ed25519 licence tokens issued by hand over WhatsApp, no server, ever. Read
+  both before starting licensing work, and note its open questions are the
+  owner's to answer, not ours to guess.
 
 ## What this is
 

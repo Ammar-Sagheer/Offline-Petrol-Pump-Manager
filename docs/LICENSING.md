@@ -2,6 +2,16 @@
 
 **Status: not built. Design and reasoning only.**
 
+> **Read `LICENSING_PLAN.md` alongside this.** That is the agreed spec to
+> build from; this document is the reasoning behind it and is still the
+> right place to start. Two things here have since been decided against and
+> should not be built: the licence **server** (there will never be one - keys
+> are issued by hand over WhatsApp), and with it the "Suggested build order"
+> below, whose steps 2-4 all assume one. The offline policy in section 3 is
+> unchanged and still non-negotiable - with no server it simply enforces
+> itself. Section 5's claim that a licence-derived business name is "nearly
+> free" is also wrong; see the plan for why.
+
 The problem: the app has been sold to one pump owner. Nothing currently stops
 him passing the installer to another pump, or a second copy running on a
 different machine, and every copy after the first is unpaid.
