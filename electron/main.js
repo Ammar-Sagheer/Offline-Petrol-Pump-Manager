@@ -22,6 +22,9 @@ const { spawn } = require('child_process');
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const { bootstrapDatabase } = require('./bootstrap-db');
 const { loadOrCreateConfig, userDataDir, dbDataDir, configPath } = require('./config');
+const { requireLicence } = require('./licence-window');
+const { loadLicence, setRestricted, localClockPastSupport } = require('./licence');
+const { checkOnlineStatus } = require('./licence-status');
 
 const isDev = process.env.ELECTRON_DEV === 'true';
 
@@ -48,6 +51,16 @@ function getUpdateLogPath() {
  */
 function checkForUpdates() {
   if (!app.isPackaged) return; // no app-update.yml in a dev/unpacked run
+
+  // Support-until gating (a licence's `su` field, docs/LICENSING_PLAN.md)
+  // ships DORMANT by owner's decision - the date already rides on every
+  // issued licence, but nothing here acts on it yet. Flip this guard live
+  // whenever enforcement should actually start; no licences need re-issuing
+  // to do it, the date is already on them.
+  //
+  // const { loadLicence, isExpired } = require('./licence');
+  // const licence = loadLicence();
+  // if (licence?.payload?.su && new Date(licence.payload.su) < new Date()) return;
 
   // Required lazily, not at module top-level: destructuring autoUpdater
   // triggers its constructor immediately (it reads app.getVersion()), and
@@ -405,14 +418,43 @@ ipcMain.handle('restore-from-backup', (_event, sourcePath) => performRestore(sou
 
 app.whenReady().then(async () => {
   try {
+    // Before bootstrapDatabase(), on purpose - see docs/LICENSING_PLAN.md,
+    // "The activation window": there is no point starting Postgres for a
+    // machine that will not be allowed to run, and the window cannot use
+    // Next anyway since that server is not up yet. Resolves to a token (a
+    // verified licence for this machine) or a graceUntil date (an existing,
+    // not-yet-licensed install); never neither - see requireLicence()'s own
+    // doc comment.
+    const licence = await requireLicence();
+    const licenceEnv = licence.token
+      ? { LICENCE_TOKEN: licence.token }
+      : { LICENCE_GRACE_UNTIL: licence.graceUntil };
+
+    // The weak, offline-only half of restriction enforcement - see
+    // docs/LICENSING_PLAN.md. Only ever pushes restricted toward true; never
+    // clears it (that is deliberately reserved for checkOnlineStatus() below,
+    // which uses a timestamp the client cannot fake by adjusting a clock).
+    // Nothing to check yet during a grace period - there is no token to read
+    // a support date off.
+    if (licence.token) {
+      const stored = loadLicence();
+      if (stored && localClockPastSupport(stored.payload)) {
+        setRestricted(true);
+      }
+    }
+
     const { env, stop } = await bootstrapDatabase();
     stopDatabase = stop;
-    await createWindow(env);
+    await createWindow({ ...env, ...licenceEnv });
 
-    // Delayed, and never awaited here - checking for an update is strictly
-    // best-effort background work that must never slow down or block a
-    // normal launch.
+    // Both delayed, and neither awaited here - checking for an update, and
+    // checking online restriction status, are both strictly best-effort
+    // background work that must never slow down or block a normal launch.
+    // Restriction status is read fresh from licence.json on every check the
+    // Next side does (app/_lib/licence.js), so updating it here takes effect
+    // immediately - no relaunch needed, unlike the token itself.
     setTimeout(checkForUpdates, 10_000);
+    setTimeout(checkOnlineStatus, 10_000);
   } catch (error) {
     console.error('[startup] failed:', error);
     dialog.showErrorBox(

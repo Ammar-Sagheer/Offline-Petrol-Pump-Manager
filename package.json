@@ -42,6 +42,8 @@
       "electron/**/*",
       "db/migrations/**/*",
       "package.json",
+      "licence-key.json",
+      "!tools/**/*",
       "!node_modules/**/*",
       "node_modules/pg/**/*",
       "node_modules/pg-cloudflare/**/*",

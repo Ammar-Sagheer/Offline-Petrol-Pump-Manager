@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Pump Manager - Activation</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: #f8faf9;
+    color: #17241b;
+    padding: 28px 24px;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .lede { color: #55645a; font-size: 13px; margin: 0 0 20px; }
+  .reason {
+    background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+    border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px;
+  }
+  label { display: block; font-size: 12px; font-weight: 600; color: #33403a; margin-bottom: 6px; }
+  .code-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .code-row input {
+    flex: 1; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 15px; letter-spacing: 0.02em; padding: 9px 10px;
+    border: 1px solid #d8e0d9; border-radius: 8px; background: #fff; color: #17241b;
+  }
+  button {
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    border-radius: 8px; padding: 9px 14px; border: 1px solid transparent;
+  }
+  .btn-primary { background: #1f8a4c; color: #fff; }
+  .btn-primary:disabled { background: #a7d7bb; cursor: not-allowed; }
+  .btn-secondary { background: #fff; border-color: #d8e0d9; color: #17241b; }
+  .btn-link { background: none; border: none; color: #1f8a4c; text-decoration: underline; padding: 0; font-weight: 500; }
+  .hint { font-size: 12px; color: #55645a; margin: 0 0 18px; }
+  hr { border: none; border-top: 1px solid #e5e9e6; margin: 22px 0; }
+  textarea {
+    width: 100%; min-height: 92px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 12px; padding: 9px 10px; border: 1px solid #d8e0d9; border-radius: 8px;
+    resize: vertical; color: #17241b;
+  }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .row-end { justify-content: flex-end; }
+  .spacer { flex: 1; }
+  #message {
+    margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13px; display: none;
+  }
+  #message.error { display: block; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+  #message.info { display: block; background: #ecfdf3; border: 1px solid #bbf0cf; color: #14532d; }
+  #fileInput { display: none; }
+  #quit { color: #91443f; }
+</style>
+</head>
+<body>
+  <h1>This copy is not yet activated</h1>
+  <p class="lede">Every install needs a licence issued for this specific computer.</p>
+  <div id="reason" class="reason" style="display:none"></div>
+
+  <label for="code">Installation code</label>
+  <div class="code-row">
+    <input id="code" type="text" readonly value="reading…" />
+    <button id="copy" class="btn-secondary">Copy</button>
+  </div>
+  <p class="hint">
+    WhatsApp this code to get your licence. You'll get back a short text file or message to
+    paste below.
+  </p>
+  <div class="row">
+    <button id="saveRequest" class="btn-link">Save request file…</button>
+  </div>
+
+  <hr />
+
+  <label for="paste">Already have your licence?</label>
+  <textarea id="paste" placeholder="Paste the licence text here"></textarea>
+  <input id="fileInput" type="file" accept=".txt" />
+  <div class="row">
+    <button id="loadFile" class="btn-secondary">Load from file…</button>
+    <span class="spacer"></span>
+    <button id="quit" class="btn-secondary">Quit</button>
+    <button id="activate" class="btn-primary" disabled>Activate</button>
+  </div>
+
+  <div id="message"></div>
+
+<script>
+  const codeInput = document.getElementById('code');
+  const reasonBox = document.getElementById('reason');
+  const paste = document.getElementById('paste');
+  const activateBtn = document.getElementById('activate');
+  const messageBox = document.getElementById('message');
+
+  const REASON_MESSAGES = {
+    machine: 'The licence on this machine was issued for a different computer.',
+    expired: 'The licence on this machine has expired.',
+  };
+
+  function showMessage(text, kind) {
+    messageBox.textContent = text;
+    messageBox.className = kind;
+  }
+
+  // Pulls the actual token out of whatever text is on hand - which is not
+  // always JUST the token. "Load from file" hands over the whole .txt file
+  // tools/issue-licence.js writes (a human-readable header, then the
+  // token), and pasting works the same way if someone does "select all" in
+  // Notepad rather than carefully highlighting one line - a completely
+  // normal thing to do.
+  //
+  // NOT a blind "strip every whitespace character" - an earlier version did
+  // that, and it silently fused the header's last date onto the front of the
+  // token with no boundary between them (the blank line separating the two
+  // is whitespace too, so removing it joined "...2027-08-08" directly onto
+  // "eyJ2Ijo...", corrupting the payload while still LOOKING like a plausible
+  // token). Line-by-line instead: keep only lines that, once trimmed, are
+  // made purely of token-safe characters (base64url plus the one '.'
+  // separator) - every header line here has a space, a colon or parentheses,
+  // so this is exactly what discards them. A token wrapped by WhatsApp/Mail
+  // across several lines survives too: each fragment is still pure
+  // token-safe characters on its own line, so every kept line simply joins
+  // back together in order.
+  function extractToken(rawText) {
+    return rawText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && /^[A-Za-z0-9_.-]+$/.test(line))
+      .join('');
+  }
+
+  function updateActivateEnabled() {
+    activateBtn.disabled = paste.value.trim().length === 0;
+  }
+
+  window.pumpManagerLicence.getCode().then(({ code, reason }) => {
+    codeInput.value = code;
+    if (reason && REASON_MESSAGES[reason]) {
+      reasonBox.textContent = REASON_MESSAGES[reason];
+      reasonBox.style.display = 'block';
+    }
+  });
+
+  document.getElementById('copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(codeInput.value);
+    showMessage('Code copied.', 'info');
+  });
+
+  document.getElementById('saveRequest').addEventListener('click', async () => {
+    const result = await window.pumpManagerLicence.saveRequestFile();
+    showMessage(
+      result.ok ? `Saved to ${result.path}` : 'Could not save the request file.',
+      result.ok ? 'info' : 'error',
+    );
+  });
+
+  document.getElementById('loadFile').addEventListener('click', () => {
+    document.getElementById('fileInput').click();
+  });
+
+  document.getElementById('fileInput').addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    // Show exactly what will be activated, not the raw file - so the box
+    // reads as "here is your licence", not "did this actually work".
+    paste.value = extractToken(await file.text());
+    updateActivateEnabled();
+  });
+
+  paste.addEventListener('input', updateActivateEnabled);
+
+  document.getElementById('activate').addEventListener('click', async () => {
+    const cleaned = extractToken(paste.value);
+    activateBtn.disabled = true;
+    activateBtn.textContent = 'Checking…';
+    const result = await window.pumpManagerLicence.activate(cleaned);
+    if (!result.ok) {
+      showMessage(result.message, 'error');
+      activateBtn.disabled = false;
+      activateBtn.textContent = 'Activate';
+    }
+    // On success the main process closes this window itself.
+  });
+
+  document.getElementById('quit').addEventListener('click', () => window.close());
+</script>
+</body>
+</html>

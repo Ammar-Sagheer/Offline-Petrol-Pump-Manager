@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 
 import SetupForm from '@/app/_components/admin/SetupForm';
 import BrandMark from '@/app/_components/ui/BrandMark';
-import { BUSINESS_NAME } from '@/app/_lib/brand';
+import { BrandProvider } from '@/app/_components/ui/BrandProvider';
+import { licensedBusinessName, licensedBusinessInitials } from '@/app/_lib/licence';
 import { anyProfilesExist } from '@/app/_lib/data-service';
 
 export const metadata = {
@@ -21,19 +22,25 @@ export default async function SetupPage() {
     redirect('/admin/login');
   }
 
-  return (
-    <div className="card p-6">
-      <div className="mb-6 flex flex-col items-center gap-3 text-center">
-        <BrandMark className="h-16" />
-        <div>
-          <h1 className="text-lg font-bold text-ink-900">{BUSINESS_NAME}</h1>
-          <p className="text-sm text-ink-500">
-            First time here - create the owner account to get started.
-          </p>
-        </div>
-      </div>
+  // Read directly and wrapped locally, same reasoning as login/page.js -
+  // this page sits outside app/admin/layout.js's own <BrandProvider>.
+  const businessName = licensedBusinessName();
 
-      <SetupForm />
-    </div>
+  return (
+    <BrandProvider businessName={businessName} initials={licensedBusinessInitials()}>
+      <div className="card p-6">
+        <div className="mb-6 flex flex-col items-center gap-3 text-center">
+          <BrandMark className="h-16" />
+          <div>
+            <h1 className="text-lg font-bold text-ink-900">{businessName}</h1>
+            <p className="text-sm text-ink-500">
+              First time here - create the owner account to get started.
+            </p>
+          </div>
+        </div>
+
+        <SetupForm />
+      </div>
+    </BrandProvider>
   );
 }

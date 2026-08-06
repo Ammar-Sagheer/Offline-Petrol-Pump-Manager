@@ -1,6 +1,9 @@
 # Stopping the app being copied to other pumps
 
-**Status: not built. Design and reasoning only.**
+**Status: this document is design and reasoning only, and was never built as
+written - `LICENSING_PLAN.md`'s no-server scheme is what actually shipped.**
+See that document's own status line for what exists and what has not yet
+been verified.
 
 > **Read `LICENSING_PLAN.md` alongside this.** That is the agreed spec to
 > build from; this document is the reasoning behind it and is still the

@@ -1,6 +1,12 @@
 # Licensing: the implementation plan
 
-**Status: agreed, not yet built. This is the spec to build from.**
+**Status: built, not yet verified on real Windows.** Every open question was
+answered before building (seats: 2; `su` gating: dormant; grace period:
+built; WhatsApp number: not yet chosen, the activation screen just says
+"WhatsApp this code" with no number printed; business name: confirmed as
+`Mubeen Petroleum Service` / `MPS`). What remains is exactly what "Testing"
+below always said would need it: fingerprint reading on real Windows, and
+the full activation flow through a packaged install.
 
 `LICENSING.md` is the reasoning - why this is worth doing at all, what the
 ceiling is, and which measures are worth the hours. Read it first; it is
@@ -252,7 +258,105 @@ Trivially patchable, and that is fine - it is aimed at the pump owner in the
 next town, not a cracker. It also fails safe in the right direction: the
 worst case is that someone keeps running an old build.
 
-**Ships dormant.** See open question 2.
+**Ships dormant.** See open question 2. This is about *updates* only, and is
+unrelated to the section below - a decision made after this document's first
+pass, adding something the sections above never covered at all: gating the
+*app itself*.
+
+## Restricting after the support date
+
+Added after the first build, when the owner asked directly: what actually
+happens once `su` passes, for a client who might connect to the internet at
+some point and one who might not? Both paths land on the same result - the
+app soft-restricts - but they get there very differently, and it is worth
+being precise about which one is doing the actual work.
+
+**The hard limit, stated plainly first.** There is no way to make a
+purely-offline expiry check that a determined person cannot defeat by
+rolling their system clock backward, because the only clock the app has is
+the one on the machine it is running on. Nothing below changes that - it
+cannot be changed without a trusted outside time source, which means
+internet, which is exactly the dependency this whole scheme exists to
+avoid needing. What follows raises the bar for someone who has not thought
+about it; it does not create a lock that resists someone who has.
+
+### What "restricted" means - decided, not the default assumption
+
+**Soft, not hard.** A restricted install still opens, still shows every
+page, still lets the owner view and export everything already recorded.
+Only *new* entries are refused - readings, purchases, customers, anything
+that writes. This was a deliberate choice against a hard lock (the app
+simply refusing to open), for the exact reason `LICENSING.md` argues
+hardest against elsewhere: a false positive on a hard lock means a paying
+client's books are inaccessible until someone fixes it, which is a worse
+outcome than the thing being restricted against.
+
+### Two independent checks, one shared flag
+
+`licence.json` gains a `restricted` boolean, next to the token. Two things
+can set it, and they are trusted very differently:
+
+1. **The local clock check** (`localClockPastSupport()` in
+   `electron/licence.js`), run once at every launch. Compares the licence's
+   `su` to `new Date()` - this machine's own clock, unverifiable. **May
+   only ever set `restricted` to `true`, never clear it.** An untrusted
+   clock that could set the flag AND clear it would be worthless the
+   moment anyone thought to roll it back and forth; letting it only ever
+   push toward restricted, never away, is what keeps it worth having at
+   all despite being weak.
+2. **The online check** (`checkOnlineStatus()` in
+   `electron/licence-status.js`), run on the same best-effort 10-second
+   delay as `checkForUpdates()` - piggybacking on the identical
+   opportunity, since both are "whenever this happens to have internet,
+   which might be never." Fetches
+   `blocked-licences.json` from `Pump-manager-releases` (the same public
+   releases repo, reused rather than standing up a real server - see "The
+   decision that shapes everything here" at the top of this document,
+   which this still does not violate: nothing here is a licence *server*,
+   it is a static file anyone can read, no different in kind from the
+   installer sitting in the same repo). Two things it can find:
+   - **A revoked key.** The owner adds a licence's `k` to the file's
+     `blocked` array by hand (chargeback, a client who stopped paying) and
+     commits it. Independent of any date.
+   - **A passed support date, verified against a clock that cannot be
+     faked.** The HTTP response's own `Date` header - generated fresh by
+     GitHub's server for that response, not read from anywhere the client
+     controls - stands in for "the real current time" instead of trusting
+     the machine's own clock. This is the thing that actually reaches
+     someone who rolled their clock back specifically to dodge the local
+     check: the moment they connect for *any* reason, this runs, and it is
+     not fooled by whatever the local clock claims.
+
+   **May set `restricted` to `true` OR clear it back to `false`** - the
+   only path allowed to lift a restriction short of activating an
+   entirely new licence, precisely because it is the one path backed by a
+   timestamp the client cannot forge.
+
+### Why this reads live, not through an env var
+
+`LICENCE_TOKEN` and `LICENCE_GRACE_UNTIL` are both snapshotted into the
+Next child's environment once, at spawn - fine for them, because neither
+is expected to change mid-session. `restricted` is different: the online
+check runs *after* the child is already spawned (same non-blocking
+reasoning as `checkForUpdates()` - it must never delay a normal launch),
+so if it were snapshotted the same way, a restriction discovered online
+would not take effect until the app was closed and reopened. Instead,
+`isRestricted()` in `app/_lib/licence.js` reads `licence.json` fresh off
+disk, via `APP_DATA_DIR` (already passed for other reasons), on every
+call - so the moment either check updates the file, the very next
+`requireRole()` call sees it, same running session, no relaunch.
+
+### Where it is actually enforced
+
+`requireRole()` in `app/_lib/helpers.js` - the same first line every
+mutating Server Action already calls, per the house rule at the top of
+`actions.js`. Adding the check there means every ordinary action is
+covered for free, with zero changes to ~20 call sites. A handful of
+actions are *not* "new data entry" in the sense that matters here and call
+`requireRoleIgnoringRestriction()` instead: `changePassword` (account
+hygiene), `createBackup` and the restore actions (recovery, not entry -
+refusing them would contradict "existing data stays safe and exportable"),
+and the Excel export route (the exportable part, made literal).
 
 ## The issuing CLI
 
@@ -360,18 +464,29 @@ vars.
 
 ## Files
 
-**New:** `electron/licence.js` (fingerprint, verify, load/save) ·
+**New:** `electron/licence.js` (fingerprint, verify, load/save, plus
+`isRestricted`/`setRestricted`/`localClockPastSupport`) ·
 `electron/licence-window.js` · `electron/licence/activate.html` + its own
-preload · `licence-key.json` (root, committed) · `tools/issue-licence.js` ·
-`app/_lib/licence.js` · `app/_components/ui/BrandProvider.js`
+preload · `electron/licence-status.js` (the online restriction check) ·
+`licence-key.json` (root, committed) · `tools/issue-licence.js` ·
+`tools/generate-keypair.js` · `app/_lib/licence.js` ·
+`app/_components/ui/BrandProvider.js` · `app/_components/ui/GraceBanner.js` ·
+`app/_components/ui/RestrictedBanner.js` · `blocked-licences.json` (root of
+the separate `Pump-manager-releases` repo, not this one)
 
 **Changed:** `electron/main.js` (gate before `bootstrapDatabase()`,
-`LICENCE_TOKEN` into the child env, `su` check in `checkForUpdates()`) ·
-`electron/config.js` (`licencePath()`) · `app/_lib/brand.js` ·
+`LICENCE_TOKEN`/`LICENCE_GRACE_UNTIL` into the child env, the local
+restriction check, scheduling `checkOnlineStatus()` alongside
+`checkForUpdates()`) · `electron/config.js` (`licencePath()`) ·
+`app/_lib/brand.js` · `app/_lib/helpers.js` (`requireRole()` now enforces
+restriction; `requireRoleIgnoringRestriction()` for the exemptions) ·
 `app/layout.js` · `app/admin/layout.js` · `AdminNavbar.js` · `BrandMark.js` ·
 `app/admin/login/page.js` · `app/admin/setup/page.js` ·
-`app/_lib/excel-report.js` · `package.json` (`!tools/**/*`) ·
-`docs/LICENSING.md` (mark which parts this plan drops)
+`app/admin/reports/export/route.js` · `app/_lib/excel-report.js` ·
+`app/_lib/actions.js` (`changePassword`, `createBackup`, `confirmRestore`,
+`deleteReplacedSnapshot` use the exemption) · `package.json`
+(`!tools/**/*`, `licence-key.json` in `files`) · `docs/LICENSING.md` (mark
+which parts this plan drops)
 
 ## Open questions - answer before building
 

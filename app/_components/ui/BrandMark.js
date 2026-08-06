@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 
-import { BUSINESS_INITIALS, LOGO_SRC } from '@/app/_lib/brand';
+import { LOGO_SRC } from '@/app/_lib/brand';
+import { useBrand } from '@/app/_components/ui/BrandProvider';
 
 /**
  * The logo, with an initials tile behind it.
@@ -37,6 +38,7 @@ import { BUSINESS_INITIALS, LOGO_SRC } from '@/app/_lib/brand';
  * is used, so alt is empty and the whole thing is hidden from screen readers.
  */
 export default function BrandMark({ className = 'h-9' }) {
+  const { initials } = useBrand();
   const [shown, setShown] = useState(false);
 
   return (
@@ -45,7 +47,7 @@ export default function BrandMark({ className = 'h-9' }) {
       className={`relative inline-flex shrink-0 items-center justify-center
                   ${shown ? 'w-auto' : 'aspect-square rounded-lg bg-brand-600'} ${className}`}
     >
-      {shown ? null : <span className="text-xs font-bold text-white">{BUSINESS_INITIALS}</span>}
+      {shown ? null : <span className="text-xs font-bold text-white">{initials}</span>}
 
       <img
         // Settled before hydration - the common case - so ask rather than wait.

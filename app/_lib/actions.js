@@ -24,6 +24,7 @@ import { withUser } from './db';
 import { login, logout } from './auth';
 import {
   requireRole,
+  requireRoleIgnoringRestriction,
   ROLES,
   roundMoney,
   landingPageFor,
@@ -144,7 +145,9 @@ export async function signOut() {
 export async function changePassword(_prevState, formData) {
   let profile;
   try {
-    profile = await requireRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
+    // Ignores restriction on purpose: account hygiene, not new data entry -
+    // someone restricted should still be able to secure their own login.
+    profile = await requireRoleIgnoringRestriction(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
   } catch (error) {
     return fail(error.message);
   }
@@ -1350,7 +1353,11 @@ export async function completeFirstRunSetup(_prevState, formData) {
 
 export async function createBackup(_prevState, _formData) {
   try {
-    await requireRole(ROLES.SUPER_ADMIN);
+    // Ignores restriction on purpose: getting your own data safely off this
+    // machine is exactly what "existing data stays exportable" promises -
+    // it would be a strange kind of restriction that blocked the one thing
+    // most likely to help someone actually resolve it.
+    await requireRoleIgnoringRestriction(ROLES.SUPER_ADMIN);
   } catch (error) {
     return fail(error.message);
   }
@@ -1453,7 +1460,10 @@ export async function createBackup(_prevState, _formData) {
 export async function confirmRestore(_prevState, formData) {
   let profile;
   try {
-    profile = await requireRole(ROLES.SUPER_ADMIN);
+    // Ignores restriction on purpose: restoring an older backup does not
+    // create new data, and refusing recovery specifically because
+    // something needs recovering would be backwards.
+    profile = await requireRoleIgnoringRestriction(ROLES.SUPER_ADMIN);
   } catch (error) {
     return fail(error.message);
   }
@@ -1489,7 +1499,9 @@ export async function confirmRestore(_prevState, formData) {
  */
 export async function deleteReplacedSnapshot(_prevState, _formData) {
   try {
-    await requireRole(ROLES.SUPER_ADMIN);
+    // Ignores restriction on purpose - same reasoning as confirmRestore()
+    // just above: housekeeping around recovery, not new data entry.
+    await requireRoleIgnoringRestriction(ROLES.SUPER_ADMIN);
   } catch (error) {
     return fail(error.message);
   }

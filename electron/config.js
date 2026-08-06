@@ -28,6 +28,10 @@ function configPath() {
   return path.join(userDataDir(), 'config.json');
 }
 
+function licencePath() {
+  return path.join(userDataDir(), 'licence.json');
+}
+
 function randomSecret(bytes = 32) {
   return crypto.randomBytes(bytes).toString('hex');
 }
@@ -60,4 +64,4 @@ function loadOrCreateConfig() {
   return config;
 }
 
-module.exports = { userDataDir, dbDataDir, configPath, loadOrCreateConfig };
+module.exports = { userDataDir, dbDataDir, configPath, licencePath, loadOrCreateConfig };

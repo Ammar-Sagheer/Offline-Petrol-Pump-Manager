@@ -9,6 +9,7 @@
  */
 import { redirect } from 'next/navigation';
 import { getSessionProfile } from './auth';
+import { isRestricted } from './licence';
 
 export const ROLES = {
   SUPER_ADMIN: 'super_admin',
@@ -59,8 +60,17 @@ export { getSessionProfile };
  *
  * This is defence in depth, not the actual protection: even if this check were
  * missing, the RLS policies would still refuse the write.
+ *
+ * Also where a soft-restricted licence (docs/LICENSING_PLAN.md,
+ * "Restricting after the support date") is enforced - refuses same as an
+ * expired session, with a message aimed at the owner rather than at staff,
+ * since only the owner can actually resolve it. A handful of actions that
+ * are not "new data entry" in the sense that phrase means - changing your
+ * own password, taking a backup, restoring one - call
+ * requireRoleIgnoringRestriction() instead; see the exemptions there for
+ * why each one is exempt.
  */
-export async function requireRole(...allowedRoles) {
+async function requireRoleChecked(checkRestriction, allowedRoles) {
   const profile = await getSessionProfile();
 
   if (!profile) {
@@ -71,7 +81,27 @@ export async function requireRole(...allowedRoles) {
     throw new Error('You do not have permission to do that.');
   }
 
+  if (checkRestriction && isRestricted()) {
+    throw new Error(
+      "This licence needs renewing before new entries can be saved. Your existing data is " +
+        'safe and can still be viewed or exported - contact your installer to resolve this.',
+    );
+  }
+
   return profile;
+}
+
+export async function requireRole(...allowedRoles) {
+  return requireRoleChecked(true, allowedRoles);
+}
+
+/**
+ * The exempted path - see the note on requireRole() above for which actions
+ * use this and why. Same role check, same signed-out check; only the
+ * restriction check is skipped.
+ */
+export async function requireRoleIgnoringRestriction(...allowedRoles) {
+  return requireRoleChecked(false, allowedRoles);
 }
 
 /**

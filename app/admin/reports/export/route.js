@@ -16,9 +16,10 @@
  */
 import { redirect } from 'next/navigation';
 
-import { requireRole, ROLES, formatDate, todayISO } from '@/app/_lib/helpers';
+import { requireRoleIgnoringRestriction, ROLES, formatDate, todayISO } from '@/app/_lib/helpers';
 import { getMonthExport } from '@/app/_lib/data-service';
 import { buildMonthlyWorkbook, workbookFilename } from '@/app/_lib/excel-report';
+import { licensedBusinessName } from '@/app/_lib/licence';
 
 function backToReports(month, message) {
   const params = new URLSearchParams({ month, export_error: message });
@@ -30,7 +31,9 @@ export async function GET(request) {
   const month = searchParams.get('month') ?? todayISO().slice(0, 7);
 
   try {
-    await requireRole(ROLES.SUPER_ADMIN);
+    // Ignores restriction on purpose: "existing data stays exportable" is
+    // the whole point of a soft restriction - see docs/LICENSING_PLAN.md.
+    await requireRoleIgnoringRestriction(ROLES.SUPER_ADMIN);
   } catch {
     // Not signed in, or not the owner - the login page is the useful landing.
     redirect('/admin/login');
@@ -54,7 +57,10 @@ export async function GET(request) {
 
   let workbook;
   try {
-    workbook = await buildMonthlyWorkbook(data, { generatedOn: formatDate(todayISO()) });
+    workbook = await buildMonthlyWorkbook(data, {
+      generatedOn: formatDate(todayISO()),
+      businessName: licensedBusinessName(),
+    });
   } catch (buildError) {
     // A broken template or a bad cell value must not download a half-written
     // file - a corrupt workbook is worse than no workbook.

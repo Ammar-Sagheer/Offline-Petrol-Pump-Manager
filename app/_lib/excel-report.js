@@ -21,8 +21,6 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
 
-import { BUSINESS_NAME } from './brand';
-
 const TEMPLATE_PATH = path.join(process.cwd(), 'app', '_lib', 'report-template.xlsx');
 
 /**
@@ -165,9 +163,15 @@ const fuelLabel = (fuel) => (fuel === 'petrol' ? 'Petrol' : fuel === 'diesel' ? 
 
 /**
  * @param {object} data  the payload from the get_month_export RPC
+ * @param {object} [options]
+ * @param {string} [options.generatedOn]
+ * @param {string} [options.businessName]  the licence-derived name (or the
+ *   neutral fallback) - a parameter, not an import, so this stays a pure
+ *   builder and the caller (the route handler, which can read the licence)
+ *   supplies it. See docs/LICENSING_PLAN.md.
  * @returns {Promise<Buffer>} a complete .xlsx
  */
-export async function buildMonthlyWorkbook(data, { generatedOn } = {}) {
+export async function buildMonthlyWorkbook(data, { generatedOn, businessName } = {}) {
   const zip = await JSZip.loadAsync(await readFile(TEMPLATE_PATH));
 
   const sales = data.sales ?? {};
@@ -177,7 +181,7 @@ export async function buildMonthlyWorkbook(data, { generatedOn } = {}) {
 
   // ---- Summary: label / value pairs, written as plain rows ----
   const summaryRows = [
-    [BUSINESS_NAME, ''],
+    [businessName ?? 'Pump Manager', ''],
     ['Monthly Report', ''],
     ['Period', `${MONTHS[month - 1]} ${year}`],
     ['Generated', generatedOn ?? ''],

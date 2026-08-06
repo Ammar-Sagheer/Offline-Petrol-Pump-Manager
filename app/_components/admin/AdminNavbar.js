@@ -4,7 +4,7 @@ import PendingLink from '@/app/_components/ui/PendingLink';
 import { usePathname } from 'next/navigation';
 
 import { signOut } from '@/app/_lib/actions';
-import { BUSINESS_NAME } from '@/app/_lib/brand';
+import { useBrand } from '@/app/_components/ui/BrandProvider';
 import BrandMark from '@/app/_components/ui/BrandMark';
 
 /**
@@ -40,6 +40,7 @@ const LINKS = [
 ];
 
 export default function AdminNavbar({ profile }) {
+  const { businessName } = useBrand();
   const pathname = usePathname();
   const visibleLinks = LINKS.filter((link) => link.roles.includes(profile.role));
   const mainLinks = visibleLinks.filter((link) => !link.edge);
@@ -79,7 +80,7 @@ export default function AdminNavbar({ profile }) {
           <div className="flex min-w-0 items-center gap-3">
             <BrandMark className="h-11" />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-ink-900">{BUSINESS_NAME}</p>
+              <p className="truncate text-sm font-semibold text-ink-900">{businessName}</p>
               <p className="truncate text-xs text-ink-500">
                 {profile.full_name}
                 <span className="mx-1.5" aria-hidden="true">
