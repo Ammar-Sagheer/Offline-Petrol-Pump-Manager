@@ -1,4 +1,4 @@
-import { formatDate, formatPKRExact, formatLitres } from '@/app/_lib/helpers';
+import { formatDate, formatPKR, formatLitres } from '@/app/_lib/helpers';
 import EmptyState from '@/app/_components/ui/EmptyState';
 import FuelBadge from '@/app/_components/ui/FuelBadge';
 
@@ -64,19 +64,19 @@ export default function CustomerLedgerTable({ entries }) {
                     ) : null}
                   </div>
                   {entry.litres ? (
-                    <span className="tabular mt-0.5 block text-xs text-ink-500">
+                    <span className="tabular mt-0.5 block text-sm text-ink-600">
                       {formatLitres(entry.litres)}
                     </span>
                   ) : null}
                 </td>
                 <td className="td-num text-red-700">
-                  {isDebit ? formatPKRExact(entry.amount) : '—'}
+                  {isDebit ? formatPKR(entry.amount) : '—'}
                 </td>
                 <td className="td-num text-brand-700">
-                  {isDebit ? '—' : formatPKRExact(entry.amount)}
+                  {isDebit ? '—' : formatPKR(entry.amount)}
                 </td>
                 <td className="td-num font-bold text-ink-900">
-                  {formatPKRExact(entry.balanceAfter)}
+                  {formatPKR(entry.balanceAfter)}
                 </td>
               </tr>
             );

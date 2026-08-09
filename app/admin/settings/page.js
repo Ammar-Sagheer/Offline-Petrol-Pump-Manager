@@ -5,7 +5,7 @@ import {
   formatRate,
   fullResetAllowed,
 } from '@/app/_lib/helpers';
-import { getTanks, getNozzles, getFuelPrices, getCurrentRates } from '@/app/_lib/data-service';
+import { getTanks, getNozzles, getRecentFuelPrices, getCurrentRates } from '@/app/_lib/data-service';
 import PageHeader from '@/app/_components/ui/PageHeader';
 import FuelBadge from '@/app/_components/ui/FuelBadge';
 import FuelPriceForm from '@/app/_components/admin/FuelPriceForm';
@@ -22,7 +22,7 @@ export default async function SettingsPage() {
   const [tanks, nozzles, prices, rates] = await Promise.all([
     getTanks(),
     getNozzles(),
-    getFuelPrices(),
+    getRecentFuelPrices(),
     getCurrentRates(),
   ]);
 

@@ -30,3 +30,26 @@ export function formatRate(value) {
   if (!Number.isFinite(n)) return 'Rs 0.00';
   return `Rs ${rateFormat.format(n)}`;
 }
+
+/**
+ * Litres to the millilitre: 0.0345 -> "0.035 L".
+ *
+ * For loose oil only. `formatLitres` stops at two decimals, which is right for
+ * a shelf - "4 L", "0.25 L" - but turns every rupee-priced pour out of a drum
+ * into "0.03 L", and two sales of different sizes into the same string. The
+ * third decimal is not decoration here; it is the difference between the
+ * figures.
+ *
+ * Trailing zeros are kept off, so a whole litre off the drum still reads "1 L"
+ * rather than "1.000 L".
+ */
+const fineLitreFormat = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 3,
+});
+
+export function formatLitresFine(value) {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return '0 L';
+  return `${fineLitreFormat.format(n)} L`;
+}

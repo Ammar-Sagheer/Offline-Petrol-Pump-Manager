@@ -20,6 +20,7 @@
  * is no network hop for a `secure` flag to protect against.
  */
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { sealData, unsealData } from "iron-session";
 import { withSystem } from "./db";
@@ -119,8 +120,22 @@ export async function logout() {
  * the profile row, so the "read own" RLS policy on profiles is satisfied by
  * construction rather than bypassed. A deactivated account is treated as
  * signed out.
+ *
+ * Wrapped in React's cache() so it runs ONCE PER REQUEST, not once per caller.
+ * Every admin navigation was paying for this twice: the layout asks who is
+ * signed in so it can draw the sidebar, then the page asks again through
+ * requirePageRole(). Each ask is two round trips to Postgres before the page
+ * has started fetching anything it means to show. Deduped, the second caller
+ * gets the first one's answer. (The reference app does the same, for the same
+ * measured reason - see its helpers.js.)
+ *
+ * This is a per-request memo and nothing more - it is not a cache across
+ * requests, and it cannot go stale. A new request, or the same user in another
+ * tab, does the lookup again. That matters: it means a staff account that is
+ * deactivated is locked out on their very next navigation, which is the one
+ * property this function is not allowed to lose.
  */
-export async function getSessionProfile() {
+export const getSessionProfile = cache(async function getSessionProfile() {
   const sessionId = await readSessionId();
   if (!sessionId) return null;
 
@@ -146,4 +161,4 @@ export async function getSessionProfile() {
 
     return profile;
   });
-}
+});

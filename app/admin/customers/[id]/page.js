@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { requirePageRole, ROLES, formatPKR, formatLitres } from '@/app/_lib/helpers';
-import { getCustomerStatement, getLedgerEntries } from '@/app/_lib/data-service';
+import { getCustomerStatement, getLedgerEntriesPage } from '@/app/_lib/data-service';
 import PageHeader from '@/app/_components/ui/PageHeader';
 import PaymentForm from '@/app/_components/admin/PaymentForm';
 import LedgerAdjustmentForm from '@/app/_components/admin/LedgerAdjustmentForm';
@@ -22,9 +22,11 @@ export default async function CustomerDetailPage({ params }) {
   const profile = await requirePageRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
   const { id } = await params;
 
-  const [statement, entries] = await Promise.all([
+  const [statement, { rows: entries }] = await Promise.all([
     getCustomerStatement(id),
-    getLedgerEntries(id),
+    // TODO(catch-up): the reference pages this with <Pager>. Rewired to the
+    // paged read for now; the page itself is ported in the next commit.
+    getLedgerEntriesPage(id, { page: 1, perPage: 500 }),
   ]);
 
   const customer = statement?.customer;
