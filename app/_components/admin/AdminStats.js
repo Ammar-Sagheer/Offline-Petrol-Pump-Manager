@@ -10,19 +10,44 @@ export function StatTile({ label, value, sub, tone = 'default' }) {
 
   return (
     <div className="bg-white px-4 py-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</p>
-      <p className={`tabular mt-1 text-2xl font-bold ${valueTone}`}>{value}</p>
-      {sub ? <p className="tabular mt-0.5 text-xs text-ink-500">{sub}</p> : null}
+      <p className="figure-label">{label}</p>
+        {/* nowrap, and a step smaller on a phone. "Rs 4,386,211" in a
+          half-width tile was breaking after the "Rs", which reads for a moment
+          as two separate figures - the one thing a money tile must never do. */}
+      <p className={`tabular mt-1 whitespace-nowrap text-xl font-bold @[50rem]:text-2xl ${valueTone}`}>
+        {value}
+      </p>
+      {sub ? <p className="tabular mt-0.5 text-sm text-ink-600">{sub}</p> : null}
     </div>
   );
 }
 
 export function StatGrid({ children, columns = 4 }) {
-  const columnClass = columns === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-4';
+  const columnClass = columns === 2 ? '' : '@[50rem]:grid-cols-4';
 
+  /*
+   * The column count follows the WIDTH OF THIS GRID, not the width of the
+   * window - hence @container and the @[..] variants rather than sm: and lg:.
+   *
+   * Those are not the same number any more. The sidebar takes 240px off the
+   * left, so at a 1024px window this grid has about 768px to work in. Asked
+   * for four columns at the `lg` viewport breakpoint it gave each tile 192px,
+   * and "Rs 4,386,211" at 24px needs more than that - the figures ran into
+   * their own dividers. Measured against the grid itself, four columns wait
+   * until there is genuinely room for them.
+   *
+   * The bottom end is the same problem from the other side: two tiles across
+   * a 320px phone leaves about 130px each, where the number either broke
+   * after the "Rs" - two lines that read for a moment as two figures - or ran
+   * out of its tile. One per row until 24rem.
+   */
   return (
-    <section className={`card grid grid-cols-2 gap-px overflow-hidden bg-ink-200 ${columnClass}`}>
-      {children}
-    </section>
+    <div className="@container">
+      <section
+        className={`card grid grid-cols-1 gap-px overflow-hidden bg-ink-200 @[24rem]:grid-cols-2 ${columnClass}`}
+      >
+        {children}
+      </section>
+    </div>
   );
 }

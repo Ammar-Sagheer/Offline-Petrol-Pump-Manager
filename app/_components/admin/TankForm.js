@@ -177,7 +177,7 @@ export default function TankForm({ tank }) {
         </p>
       </div>
 
-      <p className="text-xs text-ink-500">
+      <p className="text-sm text-ink-600">
         Opening stock is only the starting point before the first dip is recorded. Once a physical
         dip exists, that measured figure becomes the baseline instead.
       </p>

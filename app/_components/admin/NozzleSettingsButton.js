@@ -63,7 +63,7 @@ export default function NozzleSettingsButton({ nozzles, tanks }) {
         size="lg"
         title="Nozzle wiring"
         subtitle={
-          <span className="text-xs text-ink-500">
+          <span className="text-sm text-ink-600">
             Which tank each nozzle draws from, and where its meter started
           </span>
         }

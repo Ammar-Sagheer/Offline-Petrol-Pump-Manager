@@ -32,7 +32,7 @@ export default function ChangePasswordSection() {
       >
         <span>
           <span className="block text-sm font-bold text-ink-900">Change password</span>
-          <span className="block text-xs text-ink-500">
+          <span className="block text-sm text-ink-600">
             {open ? 'Hide this' : 'Pick a new password only you know'}
           </span>
         </span>

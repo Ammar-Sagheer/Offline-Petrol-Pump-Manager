@@ -66,7 +66,7 @@ export default function FuelPriceForm({ currentRates }) {
           defaultValue={today}
           className="input"
         />
-        <p className="mt-1 text-xs text-ink-500">
+        <p className="mt-1 text-sm text-ink-600">
           Readings already saved keep the rate they were sold at. Only sales from this date onward
           use the new price.
         </p>

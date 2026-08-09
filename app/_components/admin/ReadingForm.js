@@ -10,6 +10,7 @@ import NumberInput from '@/app/_components/ui/NumberInput';
 import ReadingChainWarning from '@/app/_components/admin/ReadingChainWarning';
 import { formatRate } from '@/app/_lib/format-helpers';
 import Dialog from '@/app/_components/ui/Dialog';
+import Icon from '@/app/_components/ui/Icon';
 
 /*
  * Formatting is done inline here rather than imported from helpers.js: that
@@ -18,6 +19,21 @@ import Dialog from '@/app/_components/ui/Dialog';
  * way lives in format-helpers.js instead - see formatRate above.
  */
 const litreFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+/*
+ * Meter readings always carry two decimals; litres sold do not.
+ *
+ * A pump meter is a physical dial with a tenths digit, so 1,987,128.80 and
+ * 1,987,279.95 are the same shape of number. Formatted with a bare
+ * maximumFractionDigits the first lost its trailing zero and rendered as
+ * 1,987,128.8 - a digit shorter than the figure directly beside it, in a
+ * tabular font whose whole job is to keep the columns aligned. On a screen
+ * read in a hurry against cash in a drawer, that is how a digit gets misread.
+ */
+const meterFormat = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 const moneyFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
 const showLitres = (n) => `${litreFormat.format(n || 0)} L`;
@@ -37,7 +53,14 @@ const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
  * down and yanks them back on collapse, so you lose your place after every
  * save, and the credit slip list makes the page reflow as it grows.
  */
-export default function ReadingForm({ row, date, customers, creditSales, canDelete }) {
+export default function ReadingForm({
+  row,
+  date,
+  customers,
+  creditSales,
+  canDelete,
+  showUnit = true,
+}) {
   const isSaved = Boolean(row.reading_id);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -48,31 +71,73 @@ export default function ReadingForm({ row, date, customers, creditSales, canDele
     savedRef.current = isSaved;
   }, [isSaved]);
 
-  const previousClosing =
-    row.previous_closing === null || row.previous_closing === undefined
-      ? null
-      : Number(row.previous_closing);
+  const num = (value) => (value === null || value === undefined ? null : Number(value));
+
+  const previousClosing = num(row.previous_closing);
+  const laterOpening = num(row.later_opening);
+  const closing = num(row.closing_reading);
   const openingUsed = Number(row.opening_reading ?? 0);
-  const hasChainProblem =
-    Boolean(row.later_date) || (previousClosing !== null && openingUsed !== previousClosing);
+
+  /*
+   * WHAT COUNTS AS A BROKEN CHAIN.
+   *
+   * This used to be `Boolean(row.later_date) || openingDoesNotMatch`, and the
+   * first half of that was wrong: later_date only means "a reading exists on
+   * some later date", which is true of every nozzle on every past day the
+   * moment you carry on entering. Opening any earlier date painted Check on
+   * all six rows at once, and a warning that is always on is a warning nobody
+   * reads - including on the one row where it mattered.
+   *
+   * A meter is continuous, so the chain is intact when each reading opens
+   * exactly where the one before it closed. Three ways that fails:
+   *
+   *   1. this day's opening is not the previous day's closing
+   *   2. this day IS saved, but the next reading does not open where this one
+   *      closed - the two overlap or leave a hole
+   *   3. this day is NOT saved and a later reading already exists, so saving
+   *      here back-fills underneath it and risks counting the litres twice
+   *
+   * A later reading that opens exactly where this day closes is the chain
+   * working, which is the case that used to shout.
+   */
+  const openingDoesNotFollow = previousClosing !== null && openingUsed !== previousClosing;
+  const nextDoesNotFollow =
+    isSaved && laterOpening !== null && closing !== null && laterOpening !== closing;
+  const backFillingUnderALaterDay = !isSaved && Boolean(row.later_date);
+
+  const hasChainProblem = openingDoesNotFollow || nextDoesNotFollow || backFillingUnderALaterDay;
 
   const title = `Unit ${row.unit_number} · Nozzle ${row.nozzle_label}`;
+
+  /*
+   * The row drops "Unit 1 ·" when the list is already grouped under a Unit
+   * heading - repeating it on both cards under that heading is the clutter the
+   * grouping was meant to remove.
+   *
+   * The DIALOG always keeps the full name. It opens over the whole page with
+   * the heading out of sight, and it is the one place where being sure which
+   * nozzle you are typing into actually matters.
+   */
+  const rowTitle = showUnit ? title : `Nozzle ${row.nozzle_label}`;
 
   return (
     <>
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="card block w-full px-4 py-3 text-left transition
+        className="card block w-full px-4 py-4 text-left transition sm:px-5 sm:py-5
                    hover:border-brand-300 hover:bg-brand-50/40
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
       >
         <div className="flex items-center gap-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <span className="text-sm font-bold text-ink-900">{title}</span>
+            <span className="text-lg font-bold text-ink-900">{rowTitle}</span>
             <FuelBadge fuelType={row.fuel_type} />
             {hasChainProblem ? (
-              <span className="badge bg-red-100 text-red-800">check</span>
+              <span className="badge bg-red-100 text-red-800">
+                <Icon name="warning" className="h-4 w-4" />
+                Check
+              </span>
             ) : null}
           </div>
 
@@ -81,11 +146,10 @@ export default function ReadingForm({ row, date, customers, creditSales, canDele
               isSaved ? 'bg-brand-100 text-brand-800' : 'bg-amber-100 text-amber-900'
             }`}
           >
+            <Icon name={isSaved ? 'check' : 'pencil'} className="h-4 w-4" />
             {isSaved ? 'Entered' : 'Enter'}
           </span>
-          <span aria-hidden="true" className="shrink-0 text-lg leading-none text-ink-400">
-            ›
-          </span>
+          <Icon name="chevronRight" className="h-5 w-5 shrink-0 text-ink-500" />
         </div>
 
         {/* Every number gets its own label. The old single line read
@@ -93,7 +157,7 @@ export default function ReadingForm({ row, date, customers, creditSales, canDele
             already know which figure is which - and left most of the row
             empty. Spread across the width, each one says what it is. */}
         {isSaved ? (
-          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-ink-200/70 pt-3 sm:grid-cols-4">
             <RowFigure label="Fuel sold" value={showLitres(row.litres_sold)} strong />
             <RowFigure label="Total sale" value={showMoney(row.sale_amount)} strong />
             <RowFigure label="Cash in hand" value={showMoney(row.cash_amount)} />
@@ -104,18 +168,23 @@ export default function ReadingForm({ row, date, customers, creditSales, canDele
             />
           </dl>
         ) : (
-          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-ink-200/70 pt-3 sm:grid-cols-4">
             <RowFigure
               label="Meter starts at"
-              value={litreFormat.format(openingUsed)}
+              value={meterFormat.format(openingUsed)}
               strong
             />
+            {/* "/ litre" lives in the caption, not in the figure. At the
+                readable type size "Rs 336.34 / litre" no longer fits the
+                half-width column a phone gives this, and it was truncating to
+                "Rs 336.34 / lit..." - hiding part of a number to make room for
+                a unit that never changes. */}
             <RowFigure
-              label="Today’s rate"
-              value={row.rate ? `${formatRate(row.rate)} / litre` : 'Not set'}
+              label="Rate a litre"
+              value={row.rate ? formatRate(row.rate) : 'Not set'}
               tone={row.rate ? undefined : 'warn'}
             />
-            <div className="col-span-2 self-center text-xs text-ink-500 sm:col-span-2">
+            <div className="col-span-2 self-center text-sm text-ink-600 sm:col-span-2">
               Tap to enter the closing meter reading.
             </div>
           </dl>
@@ -129,7 +198,7 @@ export default function ReadingForm({ row, date, customers, creditSales, canDele
         subtitle={
           <div className="flex items-center gap-2">
             <FuelBadge fuelType={row.fuel_type} />
-            <span className="text-xs text-ink-500">{formatDayLabel(date)}</span>
+            <span className="text-sm text-ink-600">{formatDayLabel(date)}</span>
           </div>
         }
       >
@@ -149,19 +218,15 @@ export default function ReadingForm({ row, date, customers, creditSales, canDele
  */
 function RowFigure({ label, value, strong, tone }) {
   const valueTone =
-    tone === 'muted' ? 'text-ink-400'
+    tone === 'muted' ? 'text-ink-500'
     : tone === 'warn' ? 'text-amber-700'
     : tone === 'credit' ? 'text-ink-900'
     : 'text-ink-900';
 
   return (
     <div className="min-w-0">
-      <dt className="truncate text-[0.65rem] font-medium uppercase tracking-wide text-ink-500">
-        {label}
-      </dt>
-      <dd
-        className={`tabular truncate text-sm ${strong ? 'font-bold' : 'font-semibold'} ${valueTone}`}
-      >
+      <dt className="figure-label truncate">{label}</dt>
+      <dd className={`figure-value truncate ${strong ? '' : 'font-semibold'} ${valueTone}`}>
         {value}
       </dd>
     </div>
@@ -191,8 +256,8 @@ function SavedReading({ row, date, creditSales, canDelete }) {
       <ReadingChainWarning row={row} date={date} openingUsed={row.opening_reading} />
 
       <dl className="grid grid-cols-2 gap-3 text-sm">
-        <Figure label="Opening" value={litreFormat.format(row.opening_reading)} />
-        <Figure label="Closing" value={litreFormat.format(row.closing_reading)} />
+        <Figure label="Opening" value={meterFormat.format(row.opening_reading)} />
+        <Figure label="Closing" value={meterFormat.format(row.closing_reading)} />
         <Figure label="Sold" value={showLitres(row.litres_sold)} strong />
         <Figure label="Total" value={showMoney(row.sale_amount)} strong />
         <Figure label="Cash" value={showMoney(row.cash_amount)} />
@@ -234,7 +299,7 @@ function SavedReading({ row, date, creditSales, canDelete }) {
 function Figure({ label, value, strong }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</dt>
+      <dt className="figure-label">{label}</dt>
       <dd
         className={[
           'tabular mt-0.5',
@@ -272,7 +337,32 @@ function EntryForm({ row, date, customers }) {
 
   const meterWentBackwards = hasClosing && closingValue < opening;
   const creditExceedsSale = hasClosing && cashAmount < 0;
-  const canSubmit = rate > 0 && hasClosing && !meterWentBackwards && !creditExceedsSale;
+
+  /*
+   * OVERLAPPING THE NEXT DAY. A meter only moves forwards, so two readings for
+   * one nozzle describe two separate spans of it. They overlap - and so count
+   * the same litres twice - when the next reading starts before this one
+   * finishes.
+   *
+   * This is the mistake that put about 1,678 litres and Rs 577,000 on the
+   * books twice in August 2026: a day entered against the 7th, then the same
+   * meter figures entered again against the 6th, with nothing removing the
+   * first. There was a warning in this dialog at the time and it was correct;
+   * it was also ignorable, so it was ignored.
+   *
+   * The rule that actually stops it is a trigger on nozzle_readings (migration
+   * 026) - this check only stops the trip to the server and explains the
+   * problem while the closing reading is still on screen. If the two ever
+   * disagree, the database is right.
+   */
+  const nextOpening =
+    row.later_opening === null || row.later_opening === undefined
+      ? null
+      : Number(row.later_opening);
+  const overlapsNextDay = hasClosing && nextOpening !== null && nextOpening < closingValue;
+
+  const canSubmit =
+    rate > 0 && hasClosing && !meterWentBackwards && !creditExceedsSale && !overlapsNextDay;
 
   function addLine() {
     setLines((current) => [
@@ -323,7 +413,7 @@ function EntryForm({ row, date, customers }) {
         <div>
           <span className="label">Opening</span>
           <p className="tabular rounded-lg border border-ink-200 bg-ink-100 px-3 py-2.5 text-lg font-semibold text-ink-600">
-            {litreFormat.format(opening)}
+            {meterFormat.format(opening)}
           </p>
         </div>
         <div>
@@ -348,7 +438,18 @@ function EntryForm({ row, date, customers }) {
 
       {meterWentBackwards ? (
         <p className="text-sm font-medium text-red-700">
-          The closing reading is below the opening reading of {litreFormat.format(opening)}.
+          The closing reading is below the opening reading of {meterFormat.format(opening)}.
+        </p>
+      ) : null}
+
+      {overlapsNextDay ? (
+        <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+          The reading already saved for {formatDayLabel(row.later_date)} starts at{' '}
+          {meterFormat.format(nextOpening)}, before this day would close at{' '}
+          {meterFormat.format(closingValue)} — so{' '}
+          {litreFormat.format(round2(closingValue - nextOpening))} litres would be counted on both
+          days. Clear {formatDayLabel(row.later_date)} on Readings first, then enter this day
+          again.
         </p>
       ) : null}
 
@@ -356,7 +457,7 @@ function EntryForm({ row, date, customers }) {
       <ReadingChainWarning row={row} date={date} openingUsed={opening} />
 
       {rate > 0 ? (
-        <p className="text-xs text-ink-500">
+        <p className="text-sm text-ink-600">
           Rate: <span className="tabular font-semibold text-ink-700">{formatRate(rate)}</span> per litre
         </p>
       ) : (
@@ -402,7 +503,7 @@ function EntryForm({ row, date, customers }) {
         </div>
 
         {lines.length === 0 ? (
-          <p className="text-xs text-ink-500">
+          <p className="text-sm text-ink-600">
             None yet — the whole amount is treated as cash. Took fuel on credit? Add them above.
           </p>
         ) : (
@@ -465,7 +566,7 @@ function EntryForm({ row, date, customers }) {
       {/* ---- the split ---- */}
       <div className="grid grid-cols-2 gap-3 rounded-lg border border-ink-200 p-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Cash</p>
+          <p className="figure-label">Cash</p>
           <p
             className={[
               'tabular mt-0.5 text-lg font-bold',
@@ -476,7 +577,7 @@ function EntryForm({ row, date, customers }) {
           </p>
         </div>
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Credit</p>
+          <p className="figure-label">Credit</p>
           <p className="tabular mt-0.5 text-lg font-bold text-ink-900">{showMoney(creditTotal)}</p>
         </div>
       </div>
@@ -486,7 +587,7 @@ function EntryForm({ row, date, customers }) {
           The slips come to more than this nozzle sold. Check the litres and amounts.
         </p>
       ) : (
-        <p className="text-xs text-ink-500">
+        <p className="text-sm text-ink-600">
           Cash is worked out for you. Check it against the notes in the drawer before saving.
         </p>
       )}

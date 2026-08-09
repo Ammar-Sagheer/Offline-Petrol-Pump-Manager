@@ -47,7 +47,7 @@ export default function DeleteBankAccountButton({ accountId, label, transactionC
         open={isOpen}
         onClose={() => setIsOpen(false)}
         title={`Delete ${label}?`}
-        subtitle={<span className="text-xs text-ink-500">There is no undo</span>}
+        subtitle={<span className="text-sm text-ink-600">There is no undo</span>}
       >
         <form
           action={(formData) => {

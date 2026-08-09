@@ -62,7 +62,7 @@ export default function StaffAccountForm() {
         onClose={() => setIsOpen(false)}
         title="Create a login"
         subtitle={
-          <span className="text-xs text-ink-500">
+          <span className="text-sm text-ink-600">
             There is no public signup — this is the only way in
           </span>
         }
@@ -117,7 +117,7 @@ export default function StaffAccountForm() {
               className="input"
               placeholder="At least 8 characters"
             />
-            <p className="mt-1 text-xs text-ink-500">
+            <p className="mt-1 text-sm text-ink-600">
               Shown as you type so you can pass it on. Ask them to change it under Account once
               they have signed in.
             </p>

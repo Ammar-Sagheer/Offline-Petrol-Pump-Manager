@@ -6,6 +6,7 @@ import BankAccountForm from '@/app/_components/admin/BankAccountForm';
 import BankTransactionForm from '@/app/_components/admin/BankTransactionForm';
 import DeleteBankAccountButton from '@/app/_components/admin/DeleteBankAccountButton';
 import DeleteBankTransactionButton from '@/app/_components/admin/DeleteBankTransactionButton';
+import Pager, { pageFrom } from '@/app/_components/ui/Pager';
 
 export const metadata = { title: 'Banking' };
 
@@ -19,8 +20,11 @@ export const metadata = { title: 'Banking' };
  * Owner only. Staff record readings and deliveries; what is in the account is
  * not theirs to see, the same way expenses already are not.
  */
-export default async function BankingPage() {
+const PER_PAGE = 25;
+
+export default async function BankingPage({ searchParams }) {
   await requirePageRole(ROLES.SUPER_ADMIN);
+  const page = pageFrom(await searchParams);
 
   const [accounts, transactions] = await Promise.all([
     getBankAccounts(),
@@ -40,6 +44,13 @@ export default async function BankingPage() {
     acc[txn.account_id] = (acc[txn.account_id] ?? 0) + 1;
     return acc;
   }, {});
+
+  /*
+   * Sliced rather than paged in Postgres: the per-account counts above are
+   * worked out from every transaction, and a database page would turn "14
+   * transactions" into "however many of them are on this screen".
+   */
+  const pageTransactions = transactions.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
     <>
@@ -73,7 +84,7 @@ export default async function BankingPage() {
             <Stat label="Paid out, all time" value={formatPKR(totals.paid)} />
           </section>
 
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-500">Accounts</h2>
+          <h2 className="section-heading">Accounts</h2>
           <div className="mb-8 grid gap-4 sm:grid-cols-2">
             {accounts.map((account) => (
               <AccountCard
@@ -88,7 +99,7 @@ export default async function BankingPage() {
             <BankTransactionForm accounts={accounts} />
 
             <div>
-              <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-500">
+              <h2 className="section-heading">
                 Transactions
               </h2>
 
@@ -119,7 +130,7 @@ export default async function BankingPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-ink-100">
-                      {transactions.map((txn) => {
+                      {pageTransactions.map((txn) => {
                         const isDeposit = txn.txn_type === 'deposit';
                         return (
                           <tr key={txn.id}>
@@ -128,7 +139,7 @@ export default async function BankingPage() {
                             <td className="td">
                               <span>{txn.category ?? (isDeposit ? 'Cash paid in' : '—')}</span>
                               {txn.note ? (
-                                <span className="block text-xs text-ink-500">{txn.note}</span>
+                                <span className="block text-sm text-ink-600">{txn.note}</span>
                               ) : null}
                             </td>
                             <td className="td-num font-semibold text-brand-700">
@@ -150,6 +161,16 @@ export default async function BankingPage() {
                   </table>
                 </div>
               )}
+
+              {transactions.length > 0 ? (
+                <Pager
+                  page={page}
+                  perPage={PER_PAGE}
+                  total={transactions.length}
+                  hrefFor={(n) => `/admin/banking?page=${n}`}
+                  label="Transaction pages"
+                />
+              ) : null}
             </div>
           </div>
         </>
@@ -166,7 +187,7 @@ function AccountCard({ account, transactionCount }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-bold text-ink-900">{account.account_label}</h3>
-          <p className="truncate text-xs text-ink-500">
+          <p className="truncate text-sm text-ink-600">
             {account.bank_name}
             {account.account_number ? ` · ${account.account_number}` : ''}
           </p>
@@ -178,7 +199,7 @@ function AccountCard({ account, transactionCount }) {
         />
       </div>
 
-      <p className="mt-3 text-xs font-medium uppercase tracking-wide text-ink-500">Balance</p>
+      <p className="mt-3 figure-label">Balance</p>
       {/* Red when overdrawn. A negative balance here means the books say more
           has gone out than went in, which is worth noticing immediately. */}
       <p
@@ -211,7 +232,7 @@ function AccountCard({ account, transactionCount }) {
       ) : null}
 
       {account.pruned_count > 0 ? (
-        <p className="mt-3 text-xs text-ink-500">
+        <p className="mt-3 text-sm text-ink-600">
           {account.pruned_count} older transaction{account.pruned_count === 1 ? '' : 's'} have
           dropped off the list. Their amounts are still counted above.
         </p>
@@ -223,7 +244,7 @@ function AccountCard({ account, transactionCount }) {
 function Stat({ label, value, strong = false }) {
   return (
     <div className="bg-white px-4 py-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</p>
+      <p className="figure-label">{label}</p>
       <p
         className={`tabular mt-1 font-bold text-ink-900 ${strong ? 'text-2xl' : 'text-lg'}`}
       >

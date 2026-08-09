@@ -1,7 +1,8 @@
 import PendingLink from '@/app/_components/ui/PendingLink';
 import DateJump from '@/app/_components/admin/DateJump';
+import Icon from '@/app/_components/ui/Icon';
 
-import { todayISO, shiftISODate, formatDate } from '@/app/_lib/date-helpers';
+import { todayISO, shiftISODate, formatDate, formatDateLong } from '@/app/_lib/date-helpers';
 
 /**
  * Previous / next day, a date box, and a way back to today.
@@ -22,53 +23,100 @@ export default function DateNav({
   previousDate,
   nextDate,
   paramName = 'date',
+  extraParams,
   children,
 }) {
+  /*
+   * Anything else already in the query string that must survive stepping a
+   * day. The Dashboard's chart window is the only one so far: without this,
+   * pressing the next-day arrow with a 90-day window open would drop back to
+   * 14 and the reader would blame the arrow.
+   */
+  const carried = new URLSearchParams(extraParams ?? {}).toString();
+  const dateHref = (value) =>
+    `${basePath}?${paramName}=${value}${carried ? `&${carried}` : ''}`;
+  const todayHref = carried ? `${basePath}?${carried}` : basePath;
+
   const today = todayISO();
   const isToday = date === today;
   const isYesterday = date === shiftISODate(today, -1);
   const isFuture = date > today;
 
+  /*
+   * There is ALWAYS a label now, including for an ordinary past day, which
+   * used to render none at all. A day with no label looked the same as today
+   * at a glance, and that is the mistake this whole block exists to prevent:
+   * a reading entered against a day the reader did not think they were on.
+   */
   const relativeLabel = isToday
     ? 'Today'
     : isYesterday
       ? 'Yesterday'
       : isFuture
         ? 'Future date'
-        : null;
+        : 'Past day';
 
   const labelStyle = isToday
     ? 'bg-brand-100 text-brand-800'
     : isFuture
-      ? 'bg-amber-100 text-amber-900'
-      : 'bg-ink-200 text-ink-700';
+      ? 'bg-amber-200 text-amber-900'
+      : 'bg-ink-200 text-ink-800';
+
+  // The banner is tinted when the day is NOT today, so being somewhere else is
+  // something you notice rather than something you have to read for.
+  const bannerStyle = isToday
+    ? 'border-brand-200 bg-brand-50'
+    : isFuture
+      ? 'border-amber-300 bg-amber-50'
+      : 'border-ink-300 bg-ink-100';
 
   return (
-    <div className="flex flex-col items-start gap-1.5 sm:items-end">
+    <div className="flex flex-col items-start gap-2">
+      {/*
+        WHICH DAY IS ON SCREEN, said once and said loudly.
+        
+        This used to be a line of small grey text under the controls, competing
+        with a date box the browser draws in its own locale and a copy of the
+        date in the page description. Three quiet statements of the same fact,
+        none of them dominant - and the owner lost track of which day he was
+        entering, which is how a day's readings ended up on the wrong date.
+        
+        So: one banner, larger than anything else in the block, carrying the
+        weekday (checkable against the day you have actually lived), the
+        written date, and what that day is relative to today. Tinted whenever
+        it is not today.
+      */}
+      <p
+        className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 ${bannerStyle}`}
+      >
+        <span className={`badge ${labelStyle}`}>{relativeLabel}</span>
+        <span className="text-lg font-bold text-ink-900">{formatDateLong(date)}</span>
+      </p>
+
       <div className="flex flex-wrap items-center gap-2">
         <PendingLink
-          href={`${basePath}?${paramName}=${previousDate}`}
+          href={dateHref(previousDate)}
           className="btn-secondary px-3"
           aria-label={`Go to ${formatDate(previousDate)}`}
           spinnerOnly
         >
-          <span aria-hidden="true">‹</span>
+          <Icon name="chevronRight" className="h-5 w-5 rotate-180" />
         </PendingLink>
 
-        <DateJump date={date} basePath={basePath} paramName={paramName} />
+        <DateJump date={date} basePath={basePath} paramName={paramName} extraParams={extraParams} />
 
         <PendingLink
-          href={`${basePath}?${paramName}=${nextDate}`}
+          href={dateHref(nextDate)}
           className="btn-secondary px-3"
           aria-label={`Go to ${formatDate(nextDate)}`}
           spinnerOnly
         >
-          <span aria-hidden="true">›</span>
+          <Icon name="chevronRight" className="h-5 w-5" />
         </PendingLink>
 
         {/* Only worth showing when it would actually do something. */}
         {!isToday ? (
-          <PendingLink href={basePath} className="btn-primary py-2 text-xs">
+          <PendingLink href={todayHref} className="btn-primary py-2 text-sm">
             Back to today
           </PendingLink>
         ) : null}
@@ -76,14 +124,6 @@ export default function DateNav({
         {children}
       </div>
 
-      {/* Which day is on screen, in words - the date box alone is easy to skim
-          past, and entering a reading against the wrong day is expensive. */}
-      <p className="flex items-center gap-1.5 text-xs text-ink-600">
-        {relativeLabel ? (
-          <span className={`badge ${labelStyle}`}>{relativeLabel}</span>
-        ) : null}
-        <span className="font-medium">{formatDate(date)}</span>
-      </p>
     </div>
   );
 }

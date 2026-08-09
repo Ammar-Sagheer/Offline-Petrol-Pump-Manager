@@ -16,6 +16,16 @@ import { useEffect, useRef } from 'react';
  * `size="lg"` widens the desktop dialog for content that does not fit the
  * default 32rem without scrolling sideways inside it - a table, mainly. Phones
  * are unaffected either way; the sheet already fills the screen.
+ *
+ * Deliberately NO click-outside-to-close. Every dialog here holds a form
+ * someone is part-way through typing, and a click event fires on the nearest
+ * common ancestor of mousedown and mouseup - so selecting text in a field and
+ * releasing the button a few pixels past the panel edge targets the <dialog>
+ * itself and looked exactly like a backdrop click. That silently threw away a
+ * half-entered purchase. Escape, the header X and each form's own Cancel
+ * button remain, and all three are deliberate. The nav drawer in
+ * AdminSidebar does still close on its backdrop: it holds no input, and
+ * tap-outside-to-dismiss is what people expect of a menu.
  */
 export default function Dialog({ open, onClose, title, subtitle, size = 'md', children }) {
   const dialogRef = useRef(null);
@@ -56,11 +66,6 @@ export default function Dialog({ open, onClose, title, subtitle, size = 'md', ch
     <dialog
       ref={dialogRef}
       aria-label={title}
-      onClick={(event) => {
-        // Clicking the backdrop closes. The backdrop is the dialog element
-        // itself, so this only fires when the click missed the content.
-        if (event.target === dialogRef.current) dialogRef.current.close();
-      }}
       className={`m-0 max-h-none w-full max-w-none bg-transparent p-0
                  backdrop:bg-ink-900/50
                  sm:m-auto sm:max-h-[90dvh] ${

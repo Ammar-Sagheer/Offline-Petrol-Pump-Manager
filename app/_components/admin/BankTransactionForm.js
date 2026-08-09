@@ -197,7 +197,7 @@ export default function BankTransactionForm({ accounts }) {
         </button>
       </div>
 
-      <p className="text-xs text-ink-500">
+      <p className="text-sm text-ink-600">
         {isDeposit
           ? 'Cash from the pump paid into the bank.'
           : 'A transfer out of the bank — fuel, salaries, a bill.'}
@@ -227,7 +227,7 @@ export default function BankTransactionForm({ accounts }) {
           ))}
         </select>
         {!isDeposit ? (
-          <p className="mt-1 text-xs text-ink-500">
+          <p className="mt-1 text-sm text-ink-600">
             Holds{' '}
             <span
               className={

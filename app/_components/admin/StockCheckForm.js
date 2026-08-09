@@ -36,14 +36,14 @@ export default function StockCheckForm({ tank, date, existingCheck }) {
           <h2 className="text-sm font-bold text-ink-900">{tank.name}</h2>
           <FuelBadge fuelType={tank.fuel_type} />
         </div>
-        <span className="text-xs text-ink-500">
+        <span className="text-sm text-ink-600">
           Capacity {litreFormat.format(tank.capacity_litres)} L
         </span>
       </header>
 
       <div className="mb-4">
         <div className="flex items-baseline justify-between">
-          <span className="text-xs font-medium uppercase tracking-wide text-ink-500">
+          <span className="figure-label">
             Expected in tank
           </span>
           <span
@@ -135,7 +135,7 @@ export default function StockCheckForm({ tank, date, existingCheck }) {
               placeholder="0.00"
               aria-describedby={`dip-help-${tank.id}`}
             />
-            <p id={`dip-help-${tank.id}`} className="mt-1 text-xs text-ink-500">
+            <p id={`dip-help-${tank.id}`} className="mt-1 text-sm text-ink-600">
               The dip rod reads a depth — convert it to litres on the tank chart first, then enter
               that figure here.
             </p>
@@ -162,7 +162,7 @@ export default function StockCheckForm({ tank, date, existingCheck }) {
 
           <div>
             <label className="label" htmlFor={`note-${tank.id}`}>
-              Note <span className="font-normal text-ink-400">(optional)</span>
+              Note <span className="font-normal text-ink-500">(optional)</span>
             </label>
             <input
               id={`note-${tank.id}`}
