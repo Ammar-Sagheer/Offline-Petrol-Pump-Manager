@@ -1,0 +1,72 @@
+{
+  "_comment": [
+    "The package.json fields an Electron + Next.js desktop build needs. Merge",
+    "these into the real package.json - JSON has no comments, so the notes",
+    "live in these _comment keys and should be deleted once copied.",
+    "",
+    "Generate the node_modules entries in build.files with the skill's",
+    "scripts/runtime-deps.js rather than by hand."
+  ],
+
+  "main": "electron/main.js",
+
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "postbuild": "node electron/copy-standalone-assets.js",
+    "electron": "electron .",
+    "electron:dev": "cross-env ELECTRON_DEV=true electron .",
+    "dist": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
+    "release": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish always"
+  },
+
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "cross-env": "^7.0.3"
+  },
+
+  "dependencies": {
+    "embedded-postgres": "^17.5.0-beta.15",
+    "pg": "^8.13.1",
+    "iron-session": "^8.0.4"
+  },
+
+  "build": {
+    "appId": "com.example.app",
+    "productName": "Your App",
+
+    "_comment_asar": "Native binaries that get executed (a database server) cannot reliably be chmod'd or run from inside the app.asar virtual archive. Chasing asarUnpack globs file-by-file is repeatedly wrong; turning asar off makes everything real files on disk.",
+    "asar": false,
+
+    "_comment_subnodemodules": "electron-builder treats ANY directory named node_modules - nested included - as a gate evaluated before individual file patterns. Without this, .next/standalone/node_modules is silently deleted and the packaged app dies with 'Cannot find module next'.",
+    "includeSubNodeModules": true,
+
+    "_comment_files": "Order matters. The negation must come before the re-includes, and .next/standalone must come after them.",
+    "files": [
+      "electron/**/*",
+      "db/migrations/**/*",
+      "package.json",
+      "!node_modules/**/*",
+      "node_modules/pg/**/*",
+      "node_modules/embedded-postgres/**/*",
+      "node_modules/@embedded-postgres/**/*",
+      ".next/standalone/**/*"
+    ],
+
+    "directories": { "output": "dist" },
+
+    "_comment_win": "signtool enumerating the Windows certificate store hangs the build forever when no certificate is configured. This plus CSC_IDENTITY_AUTO_DISCOVERY=false on the script is electron-builder's documented escape hatch.",
+    "win": {
+      "signAndEditExecutable": false
+    },
+
+    "_comment_publish": "Only if using auto-update. Point at a PUBLIC releases repo holding nothing but installers, so the source repo can stay private - a client-side token in an installer is not a secret.",
+    "publish": {
+      "provider": "github",
+      "owner": "your-name",
+      "repo": "your-app-releases",
+      "releaseType": "release"
+    }
+  }
+}

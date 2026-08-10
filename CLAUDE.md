@@ -25,6 +25,14 @@ Also here:
   Ed25519 licence tokens issued by hand over WhatsApp, no server, ever. Read
   both before starting licensing work, and note its open questions are the
   owner's to answer, not ours to guess.
+- `.claude/skills/` - two reusable skills written out of this project's own
+  bug log: `nextjs-to-electron` (converting a Next.js app into an offline
+  desktop build, and diagnosing a packaged build that works in dev) and
+  `project-docs` (writing and refreshing the markdown files these two repos
+  run on). They load automatically here; `.claude/skills/README.md` says how
+  to copy them into `~/.claude/skills/` for other projects. When a new
+  packaging bug is found and fixed, add it to the skill's pitfalls reference
+  as well as to PROGRESS.md - the skill is the version other projects get.
 
 ## What this is
 
