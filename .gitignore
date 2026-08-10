@@ -17,3 +17,9 @@ build/
 # that ever lapses). CLAUDE.md is NOT ignored - we maintain our own, see it
 # and PROGRESS.md for the real project record.
 AGENTS.md
+
+# Issued licences. tools/issue-licence.js writes these into the current folder,
+# which is usually the project root - and each one is a signed token naming a
+# real customer and a real machine. They belong in WhatsApp and in
+# ~/.pump-manager/register.csv, never in a repo that gets pushed.
+*-licence-seat*.txt
