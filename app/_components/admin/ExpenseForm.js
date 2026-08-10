@@ -83,7 +83,7 @@ export default function ExpenseForm() {
 
       <div>
         <label className="label" htmlFor="expense_note">
-          Note <span className="font-normal text-ink-400">(optional)</span>
+          Note <span className="font-normal text-ink-500">(optional)</span>
         </label>
         <input id="expense_note" name="note" type="text" className="input" />
       </div>

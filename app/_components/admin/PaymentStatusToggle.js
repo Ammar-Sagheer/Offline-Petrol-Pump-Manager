@@ -23,7 +23,12 @@ const OPTIONS = [
   { value: 'pending', label: 'Pending', selectedClass: 'bg-amber-400 text-amber-950' },
 ];
 
-export default function PaymentStatusToggle({ purchaseId, status }) {
+/**
+ * `kind` says which list the row came from - 'fuel' or 'lubricant' - because
+ * the Purchases page shows both in one table. The action needs it to know which
+ * table to update; the control itself looks and behaves identically either way.
+ */
+export default function PaymentStatusToggle({ purchaseId, status, kind = 'fuel' }) {
   const [error, setError] = useState(null);
   const [isSaving, startTransition] = useTransition();
   const [optimisticStatus, setOptimisticStatus] = useOptimistic(status);
@@ -38,6 +43,7 @@ export default function PaymentStatusToggle({ purchaseId, status }) {
       const formData = new FormData();
       formData.set('purchase_id', purchaseId);
       formData.set('payment_status', nextStatus);
+      formData.set('kind', kind);
 
       const result = await setPurchasePaymentStatus(null, formData);
 

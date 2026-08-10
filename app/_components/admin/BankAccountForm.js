@@ -78,7 +78,7 @@ export default function BankAccountForm({ trigger = 'header' }) {
         onClose={() => setIsOpen(false)}
         title="Add a bank account"
         subtitle={
-          <span className="text-xs text-ink-500">
+          <span className="text-sm text-ink-600">
             One of the accounts the pump&rsquo;s money passes through
           </span>
         }
@@ -121,7 +121,7 @@ export default function BankAccountForm({ trigger = 'header' }) {
               />
             </div>
           </div>
-          <p className="-mt-2 text-xs text-ink-500">
+          <p className="-mt-2 text-sm text-ink-600">
             The short name is what you call it, so two accounts at the same bank stay apart. It is
             what shows on the cards and in the month&rsquo;s report.
           </p>

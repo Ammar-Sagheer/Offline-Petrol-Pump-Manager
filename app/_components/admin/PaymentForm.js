@@ -41,7 +41,7 @@ export default function PaymentForm({ customerId, balance }) {
           placeholder="0"
         />
         {owes > 0 ? (
-          <p className="mt-1 text-xs text-ink-500">
+          <p className="mt-1 text-sm text-ink-600">
             Settling in full would be{' '}
             <span className="tabular font-semibold text-ink-700">
               Rs {moneyFormat.format(owes)}
@@ -67,7 +67,7 @@ export default function PaymentForm({ customerId, balance }) {
 
       <div>
         <label className="label" htmlFor="note">
-          Note <span className="font-normal text-ink-400">(optional)</span>
+          Note <span className="font-normal text-ink-500">(optional)</span>
         </label>
         <input
           id="note"

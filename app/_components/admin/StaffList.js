@@ -56,7 +56,7 @@ function StaffGroup({ title, caption, people, currentProfileId, emptyText, tone 
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-ink-200 bg-ink-50 px-4 py-3">
         <h3 className="text-sm font-bold text-ink-900">{title}</h3>
         <span className="badge bg-white text-ink-600">{people.length}</span>
-        <p className="w-full text-xs text-ink-500 sm:w-auto sm:flex-1">{caption}</p>
+        <p className="w-full text-sm text-ink-600 sm:w-auto sm:flex-1">{caption}</p>
       </header>
 
       {people.length === 0 ? (
@@ -93,7 +93,7 @@ function PersonRow({ person, isSelf, tone }) {
           </span>
           {isSelf ? <span className="badge bg-brand-100 text-brand-800">you</span> : null}
         </p>
-        <p className="mt-0.5 text-xs text-ink-500">
+        <p className="mt-0.5 text-sm text-ink-600">
           {person.is_active ? 'Can sign in' : 'Cannot sign in'}
         </p>
       </div>
@@ -223,7 +223,7 @@ function DeleteAccount({ person }) {
         open={isOpen}
         onClose={() => setIsOpen(false)}
         title={`Delete ${person.full_name}?`}
-        subtitle={<span className="text-xs text-ink-500">This cannot be undone</span>}
+        subtitle={<span className="text-sm text-ink-600">This cannot be undone</span>}
       >
         <form action={formAction} className="space-y-4 p-4">
           <input type="hidden" name="profile_id" value={person.id} />
@@ -251,7 +251,7 @@ function DeleteAccount({ person }) {
               autoComplete="current-password"
               className="input"
             />
-            <p className="mt-1 text-xs text-ink-500">
+            <p className="mt-1 text-sm text-ink-600">
               Asked for so that nobody who finds this screen open can delete a login.
             </p>
           </div>

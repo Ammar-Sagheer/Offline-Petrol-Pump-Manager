@@ -82,7 +82,7 @@ export default function ClearDayButton({ date, dateLabel, entryCount }) {
         onClose={() => setIsOpen(false)}
         title={`Clear ${dateLabel}?`}
         subtitle={
-          <span className="text-xs text-ink-500">
+          <span className="text-sm text-ink-600">
             {entryCount} nozzle {entryCount === 1 ? 'entry' : 'entries'} will be removed
           </span>
         }

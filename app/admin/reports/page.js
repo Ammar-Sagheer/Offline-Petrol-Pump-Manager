@@ -6,16 +6,18 @@ import {
   formatMonth,
   formatDate,
   formatLitres,
+  formatLitresFine,
   formatPKR,
 } from '@/app/_lib/helpers';
-import { getMonthlyReport, getSalesTrend, getExpenses } from '@/app/_lib/data-service';
+import { getMonthlyReport, getSalesTrend } from '@/app/_lib/data-service';
+import DailySalesTable from '@/app/_components/admin/DailySalesTable';
+import Icon from '@/app/_components/ui/Icon';
 import PageHeader from '@/app/_components/ui/PageHeader';
 import { StatTile, StatGrid } from '@/app/_components/admin/AdminStats';
 import SalesTrendChart from '@/app/_components/admin/SalesTrendChart';
 import CashCreditChart from '@/app/_components/admin/CashCreditChart';
-import ExpenseForm from '@/app/_components/admin/ExpenseForm';
 import FuelBadge from '@/app/_components/ui/FuelBadge';
-import DeleteExpenseButton from '@/app/_components/admin/DeleteExpenseButton';
+import PendingLink from '@/app/_components/ui/PendingLink';
 
 export const metadata = { title: 'Reports' };
 
@@ -44,15 +46,27 @@ export default async function ReportsPage({ searchParams }) {
   // - and disagreed with the Excel download, which was always month-based.
   const { from: monthFrom, to: monthTo } = monthRange(year, month);
 
-  const [report, trend, expenses] = await Promise.all([
+  const [report, trend] = await Promise.all([
     getMonthlyReport(year, month),
     getSalesTrend(monthFrom, monthTo),
-    getExpenses({ limit: 50 }),
   ]);
 
   const sales = report.sales ?? {};
   const purchases = report.purchases ?? {};
+  const lubricantSales = report.lubricant_sales ?? {};
+  const lubricantPurchases = report.lubricant_purchases ?? {};
+  const lubricantsByProduct = report.lubricants_by_product ?? [];
   const profit = Number(report.profit ?? 0);
+
+  // Fuel and lubricants, added up. The tiles report the business; the sections
+  // under them are where each trade is shown on its own.
+  const totalSales = Number(report.total_sales ?? 0);
+  const totalStockCost = Number(report.total_stock_cost ?? 0);
+  const totalCash = Number(sales.cash_amount ?? 0) + Number(lubricantSales.cash_amount ?? 0);
+  const totalCredit = Number(sales.credit_amount ?? 0) + Number(lubricantSales.credit_amount ?? 0);
+  const totalPending =
+    Number(purchases.pending_amount ?? 0) + Number(lubricantPurchases.pending_amount ?? 0);
+  const lubricantAmount = Number(lubricantSales.amount ?? 0);
 
   return (
     <>
@@ -93,58 +107,192 @@ export default async function ReportsPage({ searchParams }) {
       ) : null}
 
       {/* ---- monthly headline ---- */}
-      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-500">
+      <h2 className="section-heading">
         {formatDate(report.from)} – {formatDate(report.to)}
       </h2>
 
       <StatGrid>
-        <StatTile label="Sales" value={formatPKR(sales.sale_amount)} sub={formatLitres(sales.litres_sold)} />
-        <StatTile label="Fuel bought" value={formatPKR(purchases.total_cost)} sub={formatLitres(purchases.quantity_litres)} />
-        <StatTile label="Expenses" value={formatPKR(report.expenses_total)} />
+        <StatTile
+          label="Sales"
+          value={formatPKR(totalSales)}
+          sub={
+            lubricantAmount > 0
+              ? `${formatPKR(sales.sale_amount)} fuel · ${formatPKR(lubricantAmount)} lubricants`
+              : formatLitres(sales.litres_sold)
+          }
+        />
+        <StatTile
+          label="Stock bought"
+          value={formatPKR(totalStockCost)}
+          sub={
+            Number(lubricantPurchases.total_cost ?? 0) > 0
+              ? `${formatPKR(purchases.total_cost)} fuel · ${formatPKR(lubricantPurchases.total_cost)} lubricants`
+              : formatLitres(purchases.quantity_litres)
+          }
+        />
+        {/* The total only. Recording an expense, and the breakdown by
+            category, moved to /admin/expenses - so the tile carries the link
+            rather than leaving the figure with no way through to its detail. */}
+        <StatTile
+          label="Expenses"
+          value={formatPKR(report.expenses_total)}
+          sub={
+            <PendingLink
+              href={`/admin/expenses?month=${monthParam}`}
+              className="inline-flex items-center gap-1.5 font-semibold text-brand-700 underline"
+            >
+              See or add expenses
+            </PendingLink>
+          }
+        />
         <StatTile
           label="Profit"
           value={formatPKR(profit)}
           tone={profit >= 0 ? 'positive' : 'negative'}
-          sub="sales − fuel − expenses"
+          sub="sales − stock bought − expenses"
         />
       </StatGrid>
 
       <p className="mt-3 rounded-lg border border-ink-200 bg-white px-4 py-3 text-xs text-ink-600">
-        Profit here counts fuel <span className="font-semibold">bought</span> this month, not fuel
-        sold from stock. A big delivery near month end therefore makes profit look low — that money
-        is sitting in the tank, which is what the closing stock figure below shows.
+        Sales and profit here cover both trades — fuel through the nozzles and lubricants over the
+        counter. Profit counts stock <span className="font-semibold">bought</span> this month, not
+        stock sold from the tank or the shelf. A big delivery near month end therefore makes profit
+        look low — that money is sitting in stock, which is what the closing figures below show.
       </p>
 
       {/* ---- cash / credit + pending ---- */}
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <div className="card p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Cash taken</p>
-          <p className="tabular mt-1 text-xl font-bold text-ink-900">
-            {formatPKR(sales.cash_amount)}
-          </p>
+          <p className="figure-label">Cash taken</p>
+          <p className="tabular mt-1 text-xl font-bold text-ink-900">{formatPKR(totalCash)}</p>
         </div>
         <div className="card p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Given on credit</p>
-          <p className="tabular mt-1 text-xl font-bold text-ink-900">
-            {formatPKR(sales.credit_amount)}
-          </p>
+          <p className="figure-label">Given on credit</p>
+          <p className="tabular mt-1 text-xl font-bold text-ink-900">{formatPKR(totalCredit)}</p>
         </div>
         <div className="card p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
+          <p className="figure-label">
             Owed to suppliers
           </p>
           <p
             className={`tabular mt-1 text-xl font-bold ${
-              Number(purchases.pending_amount ?? 0) > 0 ? 'text-red-700' : 'text-ink-900'
+              totalPending > 0 ? 'text-red-700' : 'text-ink-900'
             }`}
           >
-            {formatPKR(purchases.pending_amount)}
+            {formatPKR(totalPending)}
           </p>
         </div>
       </div>
 
+      {/* ---- lubricants ---- */}
+      <h2 className="section-heading">
+        Lubricants
+      </h2>
+
+      {lubricantsByProduct.length === 0 ? (
+        <p className="card px-4 py-6 text-center text-sm text-ink-500">
+          No lubricants were bought or sold in this month.
+        </p>
+      ) : (
+        <>
+          <div className="mb-4 grid gap-4 sm:grid-cols-4">
+            <div className="card p-4">
+              <p className="figure-label">Sold</p>
+              <p className="tabular mt-1 text-xl font-bold text-ink-900">
+                {formatPKR(lubricantAmount)}
+              </p>
+              <p className="mt-0.5 text-sm text-ink-600">
+                {formatLitres(lubricantSales.litres)} over{' '}
+                {Number(lubricantSales.sales_count ?? 0)} sales
+              </p>
+              {/* The drum called out on its own line. It is a large share of
+                  the SALE COUNT and a small share of the money, so folded into
+                  one figure it makes both look wrong. */}
+              {Number(lubricantSales.loose_count ?? 0) > 0 ? (
+                <p className="mt-0.5 text-sm text-ink-600">
+                  of which loose oil:{' '}
+                  <span className="font-semibold text-ink-800">
+                    {formatPKR(lubricantSales.loose_amount)}
+                  </span>{' '}
+                  over {Number(lubricantSales.loose_count)} sales
+                </p>
+              ) : null}
+            </div>
+            <div className="card p-4">
+              <p className="figure-label">Cash</p>
+              <p className="tabular mt-1 text-xl font-bold text-ink-900">
+                {formatPKR(lubricantSales.cash_amount)}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="figure-label">On credit</p>
+              <p className="tabular mt-1 text-xl font-bold text-ink-900">
+                {formatPKR(lubricantSales.credit_amount)}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="figure-label">
+                Stock bought
+              </p>
+              <p className="tabular mt-1 text-xl font-bold text-ink-900">
+                {formatPKR(lubricantPurchases.total_cost)}
+              </p>
+              <p className="mt-0.5 text-sm text-ink-600">
+                {formatLitres(lubricantPurchases.quantity_litres)}
+              </p>
+            </div>
+          </div>
+
+          <div className="card table-scroll">
+            <table className="w-full min-w-[44rem]">
+              <thead className="border-b border-ink-200 bg-ink-50">
+                <tr>
+                  <th className="th">Lubricant</th>
+                  <th className="th text-right">Litres sold</th>
+                  <th className="th text-right">Sales</th>
+                  <th className="th text-right">Cash</th>
+                  <th className="th text-right">Credit</th>
+                  <th className="th text-right">Restocked</th>
+                  <th className="th text-right">Left at month end</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {lubricantsByProduct.map((product) => (
+                  <tr key={product.lubricant_id}>
+                    <td className="td font-medium">
+                      {product.name}
+                      {product.sold_loose ? (
+                        <span className="badge ml-2 bg-amber-100 text-amber-900">loose</span>
+                      ) : null}
+                    </td>
+                    <td className="td-num">
+                      {product.sold_loose
+                        ? formatLitresFine(product.litres_sold)
+                        : formatLitres(product.litres_sold)}
+                    </td>
+                    <td className="td-num font-semibold">{formatPKR(product.amount)}</td>
+                    <td className="td-num">{formatPKR(product.cash_amount)}</td>
+                    <td className="td-num">{formatPKR(product.credit_amount)}</td>
+                    <td className="td-num text-ink-600">
+                      {Number(product.bought_litres) > 0
+                        ? `${formatLitres(product.bought_litres)} · ${formatPKR(product.bought_cost)}`
+                        : '—'}
+                    </td>
+                    <td className="td-num font-semibold">
+                      {product.sold_loose
+                        ? formatLitresFine(product.closing_litres)
+                        : formatLitres(product.closing_litres)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       {/* ---- closing stock ---- */}
-      <h2 className="mb-3 mt-8 text-sm font-bold uppercase tracking-wide text-ink-500">
+      <h2 className="section-heading">
         Closing stock at month end
       </h2>
       <div className="card table-scroll">
@@ -193,123 +341,42 @@ export default async function ReportsPage({ searchParams }) {
       </div>
 
       {/* ---- 30 day trend ---- */}
-      <h2 className="mb-3 mt-8 text-sm font-bold uppercase tracking-wide text-ink-500">
+      <h2 className="section-heading">
         {formatMonth(year, month)} day by day
       </h2>
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="card p-4">
-          <h3 className="mb-3 text-sm font-bold text-ink-900">Daily sales</h3>
+          <h3 className="mb-3 text-sm font-bold text-ink-900">Daily fuel sales</h3>
           <SalesTrendChart data={trend} height={280} />
         </section>
         <section className="card p-4">
-          <h3 className="mb-3 text-sm font-bold text-ink-900">Cash vs credit</h3>
+          <h3 className="mb-3 text-sm font-bold text-ink-900">Fuel: cash vs credit</h3>
           <CashCreditChart data={trend} height={280} />
         </section>
       </div>
 
-      {/* The same 30 days as numbers - for anyone who cannot read the charts,
-          and for checking a specific day without hovering. */}
+      {/* The same days as numbers - for anyone who cannot read the charts, and
+          for checking a specific day without hovering. Still collapsed by
+          default and still scoped to the month on screen; the link goes to the
+          same table paged back over every day the pump has traded. */}
       <details className="card mt-4 p-4">
         <summary className="cursor-pointer text-sm font-semibold text-ink-800">
           Show these days as a table
         </summary>
-        <div className="table-scroll mt-4">
-          <table className="w-full min-w-[38rem]">
-            <thead className="border-b border-ink-200 bg-ink-50">
-              <tr>
-                <th className="th">Date</th>
-                <th className="th text-right">Litres</th>
-                <th className="th text-right">Petrol</th>
-                <th className="th text-right">Diesel</th>
-                <th className="th text-right">Sales</th>
-                <th className="th text-right">Cash</th>
-                <th className="th text-right">Credit</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink-100">
-              {trend.map((row) => (
-                <tr key={row.day}>
-                  <td className="td whitespace-nowrap">{formatDate(row.day)}</td>
-                  <td className="td-num">{formatLitres(row.litres_sold)}</td>
-                  <td className="td-num">{formatLitres(row.petrol_litres)}</td>
-                  <td className="td-num">{formatLitres(row.diesel_litres)}</td>
-                  <td className="td-num font-semibold">{formatPKR(row.sale_amount)}</td>
-                  <td className="td-num">{formatPKR(row.cash_amount)}</td>
-                  <td className="td-num">{formatPKR(row.credit_amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+        <div className="mt-4">
+          <DailySalesTable rows={trend} />
         </div>
+
+        <PendingLink
+          href="/admin/reports/daily"
+          className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"
+        >
+          See every day, not just this month
+          <Icon name="chevronRight" className="h-4 w-4" />
+        </PendingLink>
       </details>
 
-      {/* ---- expenses ---- */}
-      <h2 className="mb-3 mt-8 text-sm font-bold uppercase tracking-wide text-ink-500">
-        Expenses
-      </h2>
-      <div className="grid gap-6 lg:grid-cols-[22rem_1fr] [&>*]:min-w-0">
-        <ExpenseForm />
-
-        <div>
-          {(report.expenses_by_category ?? []).length > 0 ? (
-            <div className="card mb-4 p-4">
-              <h3 className="mb-3 text-sm font-bold text-ink-900">
-                This month, by category
-              </h3>
-              <ul className="space-y-2">
-                {report.expenses_by_category.map((row) => (
-                  <li key={row.category} className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className="text-ink-700">{row.category}</span>
-                    <span className="tabular font-semibold text-ink-900">
-                      {formatPKR(row.amount)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {expenses.length === 0 ? (
-            <p className="card px-4 py-6 text-center text-sm text-ink-500">
-              No expenses recorded yet.
-            </p>
-          ) : (
-            <div className="card table-scroll">
-              <table className="w-full min-w-[34rem]">
-                <thead className="border-b border-ink-200 bg-ink-50">
-                  <tr>
-                    <th className="th">Date</th>
-                    <th className="th">Category</th>
-                    <th className="th">Note</th>
-                    <th className="th text-right">Amount</th>
-                    {/* The column still needs to occupy a cell, so the label
-                        is hidden rather than the header itself. */}
-                    <th className="th">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-ink-100">
-                  {expenses.map((expense) => (
-                    <tr key={expense.id}>
-                      <td className="td whitespace-nowrap">{formatDate(expense.expense_date)}</td>
-                      <td className="td font-medium">{expense.category}</td>
-                      <td className="td text-ink-600">{expense.note ?? '—'}</td>
-                      <td className="td-num font-semibold">{formatPKR(expense.amount)}</td>
-                      <td className="td">
-                        <DeleteExpenseButton
-                          expenseId={expense.id}
-                          summary={`${expense.category} ${formatPKR(expense.amount)}`}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
     </>
   );
 }

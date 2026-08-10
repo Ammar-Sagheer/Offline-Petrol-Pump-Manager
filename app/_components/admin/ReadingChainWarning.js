@@ -18,6 +18,21 @@
  * surprise afterwards.
  */
 const litreFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+/*
+ * Meter readings always carry two decimals; litres sold do not.
+ *
+ * A pump meter is a physical dial with a tenths digit, so 1,987,128.80 and
+ * 1,987,279.95 are the same shape of number. Formatted with a bare
+ * maximumFractionDigits the first lost its trailing zero and rendered as
+ * 1,987,128.8 - a digit shorter than the figure directly beside it, in a
+ * tabular font whose whole job is to keep the columns aligned. On a screen
+ * read in a hurry against cash in a drawer, that is how a digit gets misread.
+ */
+const meterFormat = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 
 function daysBetween(fromISO, toISO) {
   const [fy, fm, fd] = String(fromISO).slice(0, 10).split('-').map(Number);
@@ -44,21 +59,63 @@ export default function ReadingChainWarning({ row, date, openingUsed }) {
 
   const messages = [];
 
-  // Back-filling into a gap that a later reading already swallowed.
-  if (row.later_date) {
+  /*
+   * Back-filling into a gap that a later reading already swallowed.
+   *
+   * Only when the chain actually breaks. A later reading that opens exactly
+   * where this day closes is the chain working normally - saying so on every
+   * past day, on every nozzle, is how a warning stops being read.
+   */
+  const closing =
+    row.closing_reading === null || row.closing_reading === undefined
+      ? null
+      : Number(row.closing_reading);
+  const nextContinuesFromHere = closing !== null && laterOpening !== null && laterOpening === closing;
+
+  if (row.later_date && !nextContinuesFromHere) {
+    /*
+     * The same clash, described two ways, because the reader is in two
+     * different situations.
+     *
+     * On a day not yet entered this is a prediction - "saving will count them
+     * twice" - and it is what stops the mistake being made. On a day already
+     * saved, the same sentence reads as a warning about something that has not
+     * happened yet, when in fact it already has. That is worse than unhelpful:
+     * it invites someone to look for a save button that is not there and
+     * conclude the message is stale. So a saved day is told what IS true, and
+     * what to do about it.
+     */
+    const isSaved = Boolean(row.reading_id);
+    const overlaps = laterOpening !== null && closing !== null && laterOpening < closing;
     const laterSpansThisDay =
       previousClosing !== null && laterOpening !== null && laterOpening === previousClosing;
 
-    messages.push({
-      tone: laterSpansThisDay ? 'danger' : 'warn',
-      text: laterSpansThisDay
-        ? `The reading already saved for ${pretty(row.later_date)} opens at ` +
-          `${litreFormat.format(laterOpening)}, the same place this day starts — so it already ` +
-          `includes these litres. Saving here will count them twice. Correct ` +
-          `${pretty(row.later_date)} first.`
-        : `A reading already exists for ${pretty(row.later_date)}. Check that its opening ` +
-          `matches whatever you close this day at, or the two will overlap.`,
-    });
+    if (isSaved) {
+      messages.push({
+        tone: overlaps ? 'danger' : 'warn',
+        text: overlaps
+          ? `This day and ${pretty(row.later_date)} both cover the same ` +
+            `${litreFormat.format(Number(closing) - laterOpening)} litres — ` +
+            `${pretty(row.later_date)} opens at ${meterFormat.format(laterOpening)}, before this ` +
+            `day closes at ${meterFormat.format(Number(closing))}. One of the two has to be ` +
+            `cleared: whichever date the meter was not read on.`
+          : `${pretty(row.later_date)} opens at ${meterFormat.format(laterOpening)} but this day ` +
+            `closes at ${meterFormat.format(Number(closing))}. The two do not join up, so ` +
+            `${litreFormat.format(laterOpening - Number(closing))} litres are on neither day.`,
+      });
+    } else {
+      messages.push({
+        tone: laterSpansThisDay ? 'danger' : 'warn',
+        text: laterSpansThisDay
+          ? `The reading already saved for ${pretty(row.later_date)} opens at ` +
+            `${meterFormat.format(laterOpening)}, the same place this day starts — so it already ` +
+            `includes these litres. Saving here would count them twice, and will be refused. ` +
+            `Clear ${pretty(row.later_date)} first.`
+          : `A reading already exists for ${pretty(row.later_date)}, opening at ` +
+            `${meterFormat.format(laterOpening)}. Close this day at or below that figure, or the ` +
+            `two will overlap and the save will be refused.`,
+      });
+    }
   }
 
   // A gap behind us: this entry covers more than one day.
@@ -82,9 +139,9 @@ export default function ReadingChainWarning({ row, date, openingUsed }) {
   ) {
     messages.push({
       tone: 'danger',
-      text: `This reading opens at ${litreFormat.format(Number(openingUsed))} but the previous ` +
+      text: `This reading opens at ${meterFormat.format(Number(openingUsed))} but the previous ` +
             `reading (${pretty(row.previous_date)}) closed at ` +
-            `${litreFormat.format(previousClosing)}. The meter cannot jump — these two rows ` +
+            `${meterFormat.format(previousClosing)}. The meter cannot jump — these two rows ` +
             `overlap or leave a hole.`,
     });
   }

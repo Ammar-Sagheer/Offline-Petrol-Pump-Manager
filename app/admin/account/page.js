@@ -38,17 +38,17 @@ export default async function AccountPage() {
       <section className="card max-w-md p-4">
         <dl className="space-y-3">
           <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">Name</dt>
+            <dt className="figure-label">Name</dt>
             <dd className="mt-0.5 text-sm font-semibold text-ink-900">{profile.full_name}</dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">Email</dt>
+            <dt className="figure-label">Email</dt>
             <dd className="mt-0.5 break-all text-sm font-semibold text-ink-900">
               {profile.email ?? '—'}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">Role</dt>
+            <dt className="figure-label">Role</dt>
             <dd className="mt-0.5 text-sm font-semibold text-ink-900">
               {profile.role === ROLES.SUPER_ADMIN
                 ? 'Owner — full access'
@@ -56,7 +56,7 @@ export default async function AccountPage() {
             </dd>
           </div>
         </dl>
-        <p className="mt-4 text-xs text-ink-500">
+        <p className="mt-4 text-sm text-ink-600">
           The email and role can only be changed by the owner
           {isOwner ? ', in Staff logins' : ''}.
         </p>
@@ -82,7 +82,7 @@ export default async function AccountPage() {
           <div className="space-y-6">{ownAccount}</div>
 
           <div>
-            <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-500">
+            <h2 className="section-heading">
               Staff logins
             </h2>
             <StaffList staff={staff} currentProfileId={profile.id} />

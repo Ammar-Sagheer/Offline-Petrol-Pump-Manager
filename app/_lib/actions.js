@@ -27,9 +27,12 @@ import {
   requireRoleIgnoringRestriction,
   ROLES,
   roundMoney,
+  roundRupees,
   landingPageFor,
   fullResetAllowed,
   formatLitres,
+  formatLitresFine,
+  formatPKR,
   formatRate,
 } from './helpers';
 
@@ -80,6 +83,18 @@ function describe(error, fallback) {
   }
   if (constraint === 'fuel_prices_fuel_type_effective_from_key') {
     return 'A rate for that fuel and date already exists. Pick a different date to change it.';
+  }
+  if (constraint === 'lubricants_active_name_unique') {
+    return 'A lubricant with that name is already on the list. Use a different name, or edit the one that is there.';
+  }
+  if (constraint === 'lubricants_loose_needs_rate') {
+    return 'A loose product needs a sale rate - it is the only thing that turns rupees into litres off the drum.';
+  }
+  if (constraint === 'lubricant_sales_split_matches_amount') {
+    return 'Cash plus credit does not equal the amount of the sale. Check the figures and try again.';
+  }
+  if (constraint === 'lubricant_sales_credit_needs_customer') {
+    return 'Choose the customer this was given to on credit.';
   }
   if (message.includes('append-only')) {
     return 'The ledger cannot be edited. Post a new offsetting entry instead.';
@@ -241,10 +256,23 @@ export async function saveReading(_prevState, formData) {
       return fail('Every credit slip needs an amount above zero.');
     }
 
+    /*
+     * WHOLE RUPEES ON THE SLIP, two decimals on the litres.
+     *
+     * The slip becomes a debit on the customer's ledger, and a debt is settled
+     * with notes - the smallest of which is one rupee. Left at two decimals,
+     * 11 litres at Rs 339.48 posted Rs 3,734.28, the customer paid the Rs 3,734
+     * he was asked for, and 28 paisa sat on his account for ever because no
+     * payment can clear it. See roundRupees in helpers.js, and migration 021
+     * for the database half.
+     *
+     * The sale itself keeps its paisa; the CASH side absorbs the difference,
+     * which is where it belongs, cash being the residual and counted in notes.
+     */
     cleanedLines.push({
       customer_id: customerId,
       litres: roundMoney(litres),
-      amount: roundMoney(amount),
+      amount: roundRupees(amount),
     });
   }
 
@@ -606,6 +634,447 @@ export async function createStockCheck(_prevState, formData) {
 }
 
 // ---------------------------------------------------------------------------
+// Lubricants
+//
+// Three things live here: the product list, stock coming in from the
+// distributor, and sales over the counter.
+//
+// Who may do what follows the same line as everywhere else. Recording a sale or
+// a delivery is daily work, so staff do both. The product list is
+// configuration - which brands are stocked, what they are priced at, what was
+// on the shelf to begin with - so it belongs to the owner, like the tanks.
+// ---------------------------------------------------------------------------
+
+/**
+ * Litres, rounded the way Postgres rounds them - three decimals, matching
+ * lubricant_sales.litres since migration 017. The third decimal is there for
+ * loose oil: Rs 20 out of a drum at Rs 580 a litre is 0.0345 L, and at two
+ * decimals that becomes 0.03 - a tenth of the sale lost, every time.
+ */
+const roundLitres = (value) => Math.round((value + Number.EPSILON) * 1000) / 1000;
+
+export async function createLubricant(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const name = text(formData, 'name');
+  const packSize = number(formData, 'pack_size_litres');
+  const saleRate = number(formData, 'sale_rate_per_litre');
+  const openingStock = number(formData, 'opening_stock_litres');
+  const openingDate = text(formData, 'opening_stock_date');
+  const soldLoose = text(formData, 'sold_loose') === 'true';
+
+  if (!name) return fail('Enter the lubricant’s name.');
+  if (packSize === null || packSize <= 0) return fail('Enter the pack size in litres.');
+  if (saleRate !== null && saleRate <= 0) return fail('The selling rate must be above zero.');
+  if (openingStock !== null && openingStock < 0) {
+    return fail('The opening stock cannot be negative.');
+  }
+  if (!openingDate) return fail('Enter the date the opening stock counts from.');
+  // The rate is the only thing turning rupees into litres off a drum, so a
+  // loose product without one could take money and no stock. The database
+  // refuses this too (lubricants_loose_needs_rate); this is the friendlier of
+  // the two messages.
+  if (soldLoose && (saleRate === null || saleRate <= 0)) {
+    return fail(
+      'Loose oil needs a selling rate per litre — it is what turns “Rs 20 of oil” ' +
+        'into litres off the drum.',
+    );
+  }
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query(
+        `insert into lubricants
+           (name, pack_size_litres, sale_rate_per_litre,
+            opening_stock_litres, opening_stock_date, sold_loose, created_by)
+         values ($1, $2, $3, $4, $5, $6, $7)`,
+        [name, packSize, saleRate, openingStock ?? 0, openingDate, soldLoose, profile.id],
+      ),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not add the lubricant.'));
+  }
+
+  revalidatePath('/admin/lubricants');
+  revalidatePath('/admin/stock-checks');
+  revalidatePath('/admin/purchases');
+  return ok(`${name} added. It can be sold and restocked from now on.`);
+}
+
+export async function updateLubricant(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const lubricantId = text(formData, 'lubricant_id');
+  const name = text(formData, 'name');
+  const packSize = number(formData, 'pack_size_litres');
+  const saleRate = number(formData, 'sale_rate_per_litre');
+  const openingStock = number(formData, 'opening_stock_litres');
+  const openingDate = text(formData, 'opening_stock_date');
+  const soldLoose = text(formData, 'sold_loose') === 'true';
+
+  if (!lubricantId) return fail('Missing the lubricant.');
+  if (!name) return fail('Enter the lubricant’s name.');
+  if (packSize === null || packSize <= 0) return fail('Enter the pack size in litres.');
+  if (saleRate !== null && saleRate <= 0) return fail('The selling rate must be above zero.');
+  if (openingStock === null || openingStock < 0) return fail('Enter the opening stock.');
+  if (!openingDate) return fail('Enter the date the opening stock counts from.');
+  if (soldLoose && (saleRate === null || saleRate <= 0)) {
+    return fail(
+      'Loose oil needs a selling rate per litre — it is what turns “Rs 20 of oil” ' +
+        'into litres off the drum.',
+    );
+  }
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query(
+        `update lubricants
+            set name = $2, pack_size_litres = $3, sale_rate_per_litre = $4,
+                opening_stock_litres = $5, opening_stock_date = $6, sold_loose = $7
+          where id = $1`,
+        [lubricantId, name, packSize, saleRate, openingStock, openingDate, soldLoose],
+      ),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not update the lubricant.'));
+  }
+
+  revalidatePath('/admin/lubricants');
+  revalidatePath('/admin/stock-checks');
+  revalidatePath('/admin');
+  return ok(`${name} updated.`);
+}
+
+/**
+ * Removes a lubricant from the shelf.
+ *
+ * The database decides which of the two possible meanings applies: a product
+ * that was never bought or sold is deleted outright, while one with history is
+ * retired so the months it appears in keep adding up. The message says which
+ * happened rather than leaving the owner to work it out - see delete_lubricant
+ * in migration 013.
+ */
+export async function deleteLubricant(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const lubricantId = text(formData, 'lubricant_id');
+  if (!lubricantId) return fail('Missing the lubricant.');
+
+  let result;
+  try {
+    result = await withUser(profile.id, async (client) => {
+      const { rows } = await client.query('select delete_lubricant($1) as result', [lubricantId]);
+      return rows[0]?.result ?? null;
+    });
+  } catch (error) {
+    return fail(describe(error, 'Could not remove the lubricant.'));
+  }
+
+  revalidatePath('/admin/lubricants');
+  revalidatePath('/admin/stock-checks');
+  revalidatePath('/admin/purchases');
+  revalidatePath('/admin');
+
+  const name = result?.name ?? 'The lubricant';
+
+  if (result?.removed) return ok(`${name} removed. It was never bought or sold.`);
+
+  return ok(
+    `${name} retired. It will not appear on the sale form again, and its past ` +
+      'sales and purchases stay on the books.',
+  );
+}
+
+/** Puts a retired product back on the shelf. */
+export async function setLubricantActive(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const lubricantId = text(formData, 'lubricant_id');
+  const isActive = text(formData, 'is_active') === 'true';
+
+  if (!lubricantId) return fail('Missing the lubricant.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query('update lubricants set is_active = $2 where id = $1', [lubricantId, isActive]),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not update the lubricant.'));
+  }
+
+  revalidatePath('/admin/lubricants');
+  revalidatePath('/admin/stock-checks');
+  return ok(isActive ? 'Back on the shelf.' : 'Retired.');
+}
+
+/**
+ * Stock in from the distributor. Same shape as a fuel delivery, and the same
+ * rule about which figure is the fact: the invoice total is typed and the rate
+ * per litre is derived from it.
+ */
+export async function createLubricantPurchase(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const lubricantId = text(formData, 'lubricant_id');
+  const purchaseDate = text(formData, 'purchase_date');
+  const quantity = number(formData, 'quantity_litres');
+  const totalCost = number(formData, 'total_cost');
+  const supplierName = text(formData, 'supplier_name');
+  const invoiceNumber = text(formData, 'invoice_number');
+  const paymentStatus = text(formData, 'payment_status') || 'pending';
+
+  if (!lubricantId) return fail('Choose which lubricant was delivered.');
+  if (!purchaseDate) return fail('Enter the delivery date.');
+  if (quantity === null || quantity <= 0) return fail('Enter how many litres were delivered.');
+  if (totalCost === null || totalCost <= 0) return fail('Enter the amount on the invoice.');
+  if (!supplierName) return fail('Enter the supplier name.');
+  if (!['paid', 'pending'].includes(paymentStatus)) return fail('Invalid payment status.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query(
+        `insert into lubricant_purchases
+           (lubricant_id, purchase_date, quantity_litres, total_cost,
+            supplier_name, invoice_number, payment_status, created_by)
+         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          lubricantId,
+          purchaseDate,
+          roundLitres(quantity),
+          roundMoney(totalCost),
+          supplierName,
+          invoiceNumber || null,
+          paymentStatus,
+          profile.id,
+        ],
+      ),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not save the purchase.'));
+  }
+
+  revalidatePath('/admin/purchases');
+  revalidatePath('/admin/lubricants');
+  revalidatePath('/admin/stock-checks');
+  revalidatePath('/admin');
+
+  return ok(`Saved. ${formatLitres(quantity)} added to the shelf.`);
+}
+
+/**
+ * One sale over the counter.
+ *
+ * Cash is derived here - amount minus whatever was put on credit - rather than
+ * taken from the form, for the same reason it is on the reading screen: cash
+ * should never be able to be quietly wrong. A sale with any credit on it must
+ * name the customer, and the database refuses it otherwise.
+ */
+export async function createLubricantSale(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const lubricantId = text(formData, 'lubricant_id');
+  const saleDate = text(formData, 'sale_date');
+  const amount = number(formData, 'amount');
+  const creditAmount = number(formData, 'credit_amount') ?? 0;
+  const customerId = text(formData, 'customer_id');
+  const note = text(formData, 'note');
+
+  if (!lubricantId) return fail('Choose which lubricant was sold.');
+  if (!saleDate) return fail('Missing the date.');
+  if (amount === null || amount <= 0) return fail('Enter what the customer was charged.');
+  if (creditAmount < 0) return fail('The credit amount cannot be negative.');
+
+  /*
+   * Whole rupees, and rounded HERE rather than further down, because the loose
+   * litres are worked out from this figure - deriving them from an unrounded
+   * amount and then storing the rounded one would put the two slightly out of
+   * step. A counter sale is money handed over the counter and the smallest
+   * thing anyone can hand over is a rupee, so "Rs 462.50 of oil" is not a real
+   * sale and a credit of Rs 462.50 is a debt nobody can pay off. Rounding both
+   * sides keeps paisa off the customer ledger through this door as well as
+   * through the readings one.
+   */
+  const total = roundRupees(amount);
+  if (total <= 0) return fail('A sale has to be at least one rupee.');
+
+  let product;
+  try {
+    product = await withUser(profile.id, async (client) => {
+      const { rows } = await client.query(
+        'select name, sold_loose, sale_rate_per_litre from lubricants where id = $1',
+        [lubricantId],
+      );
+      return rows[0] ?? null;
+    });
+  } catch (error) {
+    return fail(describe(error, 'Could not find that lubricant.'));
+  }
+
+  if (!product) return fail('Could not find that lubricant.');
+
+  /*
+   * Which number was typed depends on the product.
+   *
+   * A packed product is sold by the litre - the form asks for litres and the
+   * amount is whatever was charged for them. A drum is sold by the rupee, so
+   * the litres are ARITHMETIC ON THE RATE and are worked out here rather than
+   * accepted from the browser. Deriving them server-side is what stops a
+   * hand-edited form recording Rs 500 of oil against a teaspoon of stock, and
+   * it means the drum's book level can only ever disagree with the drum
+   * because the rate is wrong - which is one explanation to check, not two.
+   */
+  let litres;
+
+  if (product.sold_loose) {
+    const rate = Number(product.sale_rate_per_litre);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      return fail(
+        `${product.name} has no selling rate, so there is no way to tell how much oil ` +
+          `Rs ${total} is. Set a rate per litre under “Manage lubricants” first.`,
+      );
+    }
+    litres = roundLitres(total / rate);
+    if (litres <= 0) {
+      return fail(
+        `That is too small to record — at ${formatRate(rate)} a litre it works out at ` +
+          'under a millilitre.',
+      );
+    }
+  } else {
+    litres = number(formData, 'litres');
+    if (litres === null || litres <= 0) return fail('Enter how many litres were sold.');
+    litres = roundLitres(litres);
+  }
+
+  const credit = roundRupees(creditAmount);
+
+  if (credit > total) {
+    return fail('The amount on credit is more than the sale itself. Check the figures.');
+  }
+  if (credit > 0 && !customerId) {
+    return fail('Choose the customer this was given to on credit.');
+  }
+
+  const cash = roundMoney(total - credit);
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query(
+        `insert into lubricant_sales
+           (lubricant_id, sale_date, litres, amount, cash_amount, credit_amount,
+            customer_id, note, created_by)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          lubricantId,
+          saleDate,
+          litres,
+          total,
+          cash,
+          credit,
+          // A cash sale may still name the customer, but only a credit sale needs to.
+          customerId || null,
+          note || null,
+          profile.id,
+        ],
+      ),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not save the sale.'));
+  }
+
+  revalidatePath('/admin/lubricants');
+  revalidatePath('/admin/lubricants/loose');
+  revalidatePath('/admin/stock-checks');
+  revalidatePath('/admin');
+  if (credit > 0) revalidatePath('/admin/customers');
+
+  /*
+   * The confirmation leads with whichever number the owner actually typed. On
+   * a drum that is the money - reading back "0.034 L sold" to someone who
+   * typed "20" is an answer to a question nobody asked, and it looks wrong
+   * besides.
+   */
+  const sold = product.sold_loose
+    ? `${formatPKR(total)} of ${product.name} (${formatLitresFine(litres)})`
+    : formatLitres(litres);
+
+  return ok(
+    credit > 0
+      ? `Saved. ${sold} sold, ${formatPKR(credit)} of it on credit and posted to the ledger.`
+      : `Saved. ${sold} sold for cash.`,
+  );
+}
+
+/**
+ * Removes a sale. Owner only, like deleting a nozzle reading, and for the same
+ * reason: the credit on it has already moved a customer's balance. The database
+ * posts the offsetting entry before the row goes, so the ledger keeps showing
+ * both what happened and what undid it.
+ */
+export async function deleteLubricantSale(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const saleId = text(formData, 'sale_id');
+  if (!saleId) return fail('Missing the sale.');
+
+  let result;
+  try {
+    result = await withUser(profile.id, async (client) => {
+      const { rows } = await client.query('select delete_lubricant_sale($1) as result', [saleId]);
+      return rows[0]?.result ?? null;
+    });
+  } catch (error) {
+    return fail(describe(error, 'Could not delete the sale.'));
+  }
+
+  revalidatePath('/admin/lubricants');
+  revalidatePath('/admin/stock-checks');
+  revalidatePath('/admin/customers');
+  revalidatePath('/admin');
+
+  return ok(
+    result?.credit_reversed
+      ? 'Sale deleted, and the credit on it reversed on the customer’s ledger.'
+      : 'Sale deleted. Stock has been recalculated.',
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Customers and the ledger
 // ---------------------------------------------------------------------------
 
@@ -622,25 +1091,255 @@ export async function createCustomer(_prevState, formData) {
   const phone = text(formData, 'phone');
   const creditLimit = number(formData, 'credit_limit');
 
+  /*
+   * Most names typed into this app are not new customers - they came out of a
+   * paper register, and some already owe money while a few have paid ahead.
+   * The opening balance is asked for HERE rather than left as a second trip to
+   * the customer's own page, because the second trip is the one that gets
+   * forgotten - and an account silently starting at zero when the man owes
+   * Rs 40,000 is money leaving the books quietly.
+   *
+   * The amount is always positive and the direction says which way it goes. A
+   * signed figure would allow "-500" and "they owe us" to disagree, with
+   * nothing to settle the argument.
+   */
+  const openingDirection = text(formData, 'opening_direction');
+  const openingAmount = number(formData, 'opening_amount');
+
   if (!name) return fail('Enter the customer’s name.');
   if (creditLimit !== null && creditLimit < 0) return fail('The credit limit cannot be negative.');
+  if (openingAmount !== null && openingAmount < 0) {
+    return fail('Enter the opening balance as a positive figure and pick which way it goes.');
+  }
 
-  let newId;
+  const opening = openingDirection ? roundRupees(openingAmount ?? 0) : 0;
+  if (opening > 0 && !['owes', 'in_credit'].includes(openingDirection)) {
+    return fail('Say whether the customer owes this amount or has paid ahead.');
+  }
+
+  // One transaction for the customer and their opening entry - see migration
+  // 023. Two separate inserts could leave the customer created and the balance
+  // missing, which is the silent zero this is meant to prevent.
   try {
-    newId = await withUser(profile.id, async (client) => {
-      const { rows } = await client.query(
-        `insert into customers (name, vehicle_number, phone, credit_limit, created_by)
-         values ($1, $2, $3, $4, $5) returning id`,
-        [name, vehicleNumber || null, phone || null, creditLimit, profile.id],
-      );
-      return rows[0].id;
-    });
+    await withUser(profile.id, (client) =>
+      client.query(
+        'select create_customer_with_opening($1, $2, $3, $4, $5, $6) as id',
+        [
+          name,
+          vehicleNumber || null,
+          phone || null,
+          creditLimit,
+          opening,
+          opening > 0 ? openingDirection : null,
+        ],
+      ),
+    );
   } catch (error) {
     return fail(describe(error, 'Could not create the customer.'));
   }
 
   revalidatePath('/admin/customers');
-  redirect(`/admin/customers/${newId}`);
+
+  /*
+   * Returns rather than redirects. This form lives in a dialog on the customer
+   * list now, so the useful ending is the dialog closing over a list that
+   * already has the new name on it - not being thrown onto a detail page that
+   * shows nothing except what was typed a second ago.
+   *
+   * The opening balance is repeated back because it is the one figure here
+   * that came from a choice rather than a text box, and this is the last
+   * chance to notice it went the wrong way before it is on the ledger for good.
+   */
+  if (opening > 0) {
+    return ok(
+      openingDirection === 'owes'
+        ? `${name} added, owing ${formatPKR(opening)}.`
+        : `${name} added, with ${formatPKR(opening)} paid ahead.`,
+    );
+  }
+
+  return ok(`${name} added.`);
+}
+
+/**
+ * Correcting a customer's details - a misspelled name, a new phone number, a
+ * different vehicle, a raised credit limit.
+ *
+ * DETAILS ONLY. Nothing here can touch the balance: that lives in the ledger,
+ * which is append-only, and is moved with a payment or an adjustment. Keeping
+ * the two apart is what makes this safe to hand to staff - the worst outcome
+ * of a mistake here is a wrong spelling, not a wrong figure.
+ *
+ * Same roles as creating one. Someone who can add a customer with a typo
+ * should be able to fix the typo.
+ */
+export async function updateCustomer(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const customerId = text(formData, 'customer_id');
+  const name = text(formData, 'name');
+  const vehicleNumber = text(formData, 'vehicle_number');
+  const phone = text(formData, 'phone');
+  const creditLimit = number(formData, 'credit_limit');
+
+  if (!customerId) return fail('Missing the customer.');
+  if (!name) return fail('Enter the customer’s name.');
+  if (creditLimit !== null && creditLimit < 0) return fail('The credit limit cannot be negative.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query(
+        `update customers
+            set name = $2, vehicle_number = $3, phone = $4, credit_limit = $5
+          where id = $1`,
+        [customerId, name, vehicleNumber || null, phone || null, creditLimit],
+      ),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not update the customer.'));
+  }
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath('/admin/customers');
+  return ok('Details updated.');
+}
+
+/**
+ * Takes a customer off the list - a name typed wrong, a duplicate, or an
+ * account that has genuinely finished.
+ *
+ * Owner only, and the database decides which of the two possible meanings
+ * applies: an account that never traded is deleted outright, one with history
+ * is retired so the months it appears in keep adding up. It refuses either way
+ * while the balance is not zero, because a retired customer drops out of
+ * "total outstanding" and a debt must not vanish quietly. The message says
+ * which happened, and names the figure when it refuses - see delete_customer
+ * in migration 020.
+ */
+export async function deleteCustomer(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const customerId = text(formData, 'customer_id');
+  if (!customerId) return fail('Missing the customer.');
+
+  let result;
+  try {
+    result = await withUser(profile.id, async (client) => {
+      const { rows } = await client.query('select delete_customer($1) as result', [customerId]);
+      return rows[0]?.result ?? null;
+    });
+  } catch (error) {
+    return fail(describe(error, 'Could not remove the customer.'));
+  }
+
+  revalidatePath('/admin/customers');
+  revalidatePath('/admin');
+
+  const name = result?.name ?? 'The customer';
+
+  if (result?.removed) {
+    return ok(`${name} removed. They had never taken anything on credit.`);
+  }
+
+  return ok(
+    `${name} removed from the list. Their past credit and payments stay on the ` +
+      'books, and they can be brought back at any time.',
+  );
+}
+
+/**
+ * Deletes a customer for good - the row and their ledger entries with it.
+ *
+ * The step beyond Remove, for a name added by mistake that picked up entries
+ * and would otherwise sit in the Removed list for ever looking like a real
+ * customer who left.
+ *
+ * The database decides whether it is allowed, and the line is narrow on
+ * purpose: only an account whose whole footprint is entries the owner typed
+ * himself. A credit slip belongs to a nozzle reading and a day already
+ * reported, so a customer who genuinely traded can only ever be retired - the
+ * refusal says so and points at clearing the day instead. See purge_customer
+ * in migration 022.
+ *
+ * The typed name is checked in the database rather than only in the browser,
+ * because it is the last thing standing between a mis-aimed click and money
+ * records that do not come back.
+ */
+export async function purgeCustomer(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const customerId = text(formData, 'customer_id');
+  const confirmName = text(formData, 'confirm_name');
+
+  if (!customerId) return fail('Missing the customer.');
+  if (!confirmName) return fail('Type the customer’s name to confirm.');
+
+  let result;
+  try {
+    result = await withUser(profile.id, async (client) => {
+      const { rows } = await client.query('select purge_customer($1, $2) as result', [
+        customerId,
+        confirmName,
+      ]);
+      return rows[0]?.result ?? null;
+    });
+  } catch (error) {
+    return fail(describe(error, 'Could not delete the customer.'));
+  }
+
+  revalidatePath('/admin/customers');
+  revalidatePath('/admin');
+
+  const name = result?.name ?? 'The customer';
+  const gone = Number(result?.entries_deleted ?? 0);
+
+  return ok(
+    gone > 0
+      ? `${name} deleted for good, along with ${gone} ledger ${gone === 1 ? 'entry' : 'entries'}.`
+      : `${name} deleted for good.`,
+  );
+}
+
+/** Puts a removed customer back on the list. */
+export async function setCustomerActive(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const customerId = text(formData, 'customer_id');
+  const isActive = text(formData, 'is_active') === 'true';
+
+  if (!customerId) return fail('Missing the customer.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query('update customers set is_active = $2 where id = $1', [customerId, isActive]),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not update the customer.'));
+  }
+
+  revalidatePath('/admin/customers');
+  revalidatePath('/admin');
+  return ok(isActive ? 'Back on the customer list.' : 'Removed from the list.');
 }
 
 /**
@@ -666,12 +1365,17 @@ export async function recordPayment(_prevState, formData) {
   if (amount === null || amount <= 0) return fail('Enter how much they paid.');
   if (!entryDate) return fail('Enter the date of the payment.');
 
+  // Whole rupees: this is cash over the counter, and there is nothing smaller
+  // to hand over.
+  const paid = roundRupees(amount);
+  if (paid <= 0) return fail('A payment has to be at least one rupee.');
+
   try {
     await withUser(profile.id, (client) =>
       client.query(
         `insert into ledger_entries (customer_id, entry_type, amount, entry_date, note, created_by)
          values ($1, 'credit', $2, $3, $4, $5)`,
-        [customerId, amount, entryDate, note || 'Payment received', profile.id],
+        [customerId, paid, entryDate, note || 'Payment received', profile.id],
       ),
     );
   } catch (error) {
@@ -710,12 +1414,18 @@ export async function recordLedgerAdjustment(_prevState, formData) {
   if (!entryDate) return fail('Enter a date.');
   if (!note) return fail('Write a note explaining this adjustment - it stays on the record permanently.');
 
+  // Whole rupees, like every other entry on the ledger. An adjustment is the
+  // tool for squaring an account, and one that could itself leave paisa behind
+  // would not finish the job.
+  const adjustment = roundRupees(amount);
+  if (adjustment <= 0) return fail('An adjustment has to be at least one rupee.');
+
   try {
     await withUser(profile.id, (client) =>
       client.query(
         `insert into ledger_entries (customer_id, entry_type, amount, entry_date, note, created_by)
          values ($1, $2, $3, $4, $5, $6)`,
-        [customerId, entryType, amount, entryDate, note, profile.id],
+        [customerId, entryType, adjustment, entryDate, note, profile.id],
       ),
     );
   } catch (error) {

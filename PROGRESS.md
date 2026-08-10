@@ -12,7 +12,8 @@ Reference repo (read-only, do not push to it):
 its own `CLAUDE.md`, `docs/UI_CONVENTIONS.md` and `docs/CHANGELOG.md` - read
 those before any UI work here.** The offline app is meant to be visually and
 behaviourally identical to it, so its design decisions are this repo's design
-decisions; the UI was last synced to its commit `1de9266`.
+decisions; the UI is synced to its commit `ba9ca7c` (was `1de9266` - see "The
+catch-up to reference main" below).
 
 **The one deliberate UI difference:** the login page redirects to
 `/admin/setup` when no profile exists. A reset database has no owner account
@@ -36,6 +37,71 @@ signed-in dashboard → sign out, on his real Windows machine via
 installer), which has hit several Windows-specific bugs the dev-mode path
 didn't surface. See "Bug log" below - that's the part most worth reading
 before assuming something is done.
+
+## The catch-up to reference main (branch `catch-up-to-main-035`)
+
+The reference app moved on a long way while this one was being packaged. This
+branch brings the database and the whole UI up to its `ba9ca7c`.
+
+**The build was NOT at reference migration 027, as the brief assumed - it was
+at 023.** `db/migrations/` is a consolidation, so the numbers never lined up;
+`git grep -i lubricant` returned nothing, and at commit `1de9266` (the UI sync
+point) the reference itself was only at 021. So the gap was reference 024-035,
+twelve migrations, and it included the entire lubricants module this build had
+never had. Worth remembering as a technique: the offline numbering cannot be
+compared to the reference's, only the *contents* can.
+
+Now `db/migrations/013-024` = reference `024-035`. The translation really was
+as small as the reference README promises - `auth.uid()` -> `current_uid()` at
+five call sites, `authenticated`/`anon` -> `app_user`, and one dropped
+`revoke ... from anon`. Even 035, which that README calls the hardest thing to
+port, needed only `activity_actor()` changing.
+
+**Two findings worth carrying forward:**
+
+1. **Reference migration 034 has a bug this build had to fix.** It writes the
+   opening entry's type as `case when ... then 'debit' else 'credit' end`,
+   which raises `column "entry_type" is of type ledger_entry_type but
+   expression is of type text`. A bare `'debit'` is an untyped literal Postgres
+   coerces to the enum; a CASE whose branches are all untyped literals resolves
+   to `text` first, and there is no implicit text -> enum cast. Confirmed
+   against a real cluster: bare literal accepted, CASE refused, CASE with a
+   cast accepted. **The web app's New-customer opening balance cannot ever have
+   worked** - this should be fixed upstream too.
+2. **Reference 033 drops `security definer` and `set search_path = public`**
+   from `trg_ledger_append_only` when it restates it. Kept faithful here since
+   the function touches no tables and only calls pg_catalog builtins, but it is
+   an attribute lost in passing rather than on purpose.
+
+**How it was verified** (the harness is worth rebuilding rather than
+re-inventing - see the scratchpad technique below):
+
+- All 24 migrations applied cold to a throwaway `embedded-postgres` cluster,
+  then **84 proofs**, every one inside a transaction that aborts, so no test
+  data is ever committed. The valuable ones: the append-only ledger still
+  refuses an edit **as the table owner** (RLS out of the picture) with all
+  three exception columns; `purge_customer`'s new delete exception stays narrow
+  even when its setting names a different customer; the trend does not multiply
+  fuel readings against oil sales; Rs 20 from a Rs 580/L drum stores as
+  `0.034 L`, not `0.03`.
+- **The schema was reconciled** by building the reference's own 35 migrations
+  in a parallel database (shimming only `anon`, `authenticated`, `auth.users`,
+  `auth.uid()`) and diffing the catalogs. Triggers 34 vs 34, identical.
+  Everything else differs only by the identity plumbing. The one real mismatch
+  is cosmetic: a nozzle CHECK is named `nozzles_starting_reading_not_negative`
+  here and `..._check` there, because 001 folded reference 012 in rather than
+  replaying it.
+- **All 78 SQL statements** in `data-service.js` and `actions.js` `PREPARE`d
+  against the real schema as `app_user`. PREPARE resolves every table, column,
+  function signature and cast without executing, so a mistyped column fails
+  there instead of on a rendered page.
+- **A real monthly workbook built end to end** - seeded August, through
+  `get_month_export`, into a 15.4 KB xlsx with the Lubricants sheet and the
+  loose-oil lines present.
+- `roundRupees` checked against Postgres `round()` on 15 cases including the
+  half-way ones. They agree; `Math.round(-0.5)` would not have.
+- **The app was then actually RUN** (see below), which is the only step that
+  proves anything about what renders.
 
 ## What's built
 
@@ -310,6 +376,42 @@ steps further in - that's expected, not a sign the previous fix was wrong.
   `@embedded-postgres/linux-x64`. Windows is unaffected (that package ships
   `.dll`s, no symlinks) and has packaged successfully, so this is a
   sandbox-only limitation, not a bug to fix.
+
+## UI QA after the catch-up (on the owner's own Windows machine)
+
+Done because a clean `next build` is not evidence - bug #8 below compiled fine
+and threw nothing. Playwright plus real Chromium, against `next start` pointed
+at a throwaway `embedded-postgres` cluster seeded with six trading days, three
+customers, a lubricant shelf including the drum, banking and expenses. The seed
+goes in through the real RPCs and triggers, not raw inserts, so it cannot
+create data the app itself could not.
+
+**All 17 admin screens clean**, at 1440px and 400px, asserted against: a raw
+`Date.toString()` leaking through (bug #8's exact family), a `GMT+0000` offset
+in the text, `[object Object]`, `NaN`, `undefined`, `Rs -0`, a Next error
+boundary, console errors, and page-level horizontal overflow.
+
+Looked at as well as asserted on, which is how bug #8 was actually caught:
+the drum's three-decimal litres render (`1.752 L` sold, `398.248 L` in stock),
+the activity log shows a named actor with the business day it was *filed
+against* distinct from the time it was typed, and the dashboard's new oil chart
+stacks packed against loose.
+
+**Role enforcement re-checked after the nav rewrite**: a `data_entry` login
+lands on `/admin/readings`, is offered exactly its six sections, and is
+redirected away from all seven owner-only ones - including the new `/activity`
+and `/expenses`.
+
+Two things that turned up as *test* bugs, both worth knowing:
+- The seed's "already seeded?" guard used `select count(*) from profiles`,
+  which returns 0 as `app_user` with no identity set, because of the RLS policy
+  that caused bug #4. Use `any_profiles_exist()`, which exists for exactly this.
+- `page.waitForURL(/\/admin/)` also matches `/admin/login`, so a login check
+  can carry on against a signed-out browser and report everything as passing.
+
+What this pass does **not** cover: writing through the UI (every mutation was
+exercised via SQL/RPC, not by filling in forms), and anything Electron- or
+installer-specific.
 
 ## Full UI QA pass (every screen, in this sandbox)
 

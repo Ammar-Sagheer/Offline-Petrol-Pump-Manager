@@ -55,7 +55,7 @@ export default function ChangePasswordForm() {
           autoComplete="new-password"
           className="input"
         />
-        <p className="mt-1 text-xs text-ink-500">At least 8 characters.</p>
+        <p className="mt-1 text-sm text-ink-600">At least 8 characters.</p>
       </div>
 
       <div>

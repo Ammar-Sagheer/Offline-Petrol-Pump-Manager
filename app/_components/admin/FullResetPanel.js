@@ -48,7 +48,7 @@ export default function FullResetPanel() {
         open={isOpen}
         onClose={() => setIsOpen(false)}
         title="Empty the whole book?"
-        subtitle={<span className="text-xs text-ink-500">There is no undo</span>}
+        subtitle={<span className="text-sm text-ink-600">There is no undo</span>}
       >
         <form action={formAction} className="space-y-4 p-4">
           <p className="text-sm text-ink-700">

@@ -32,9 +32,13 @@ function isNavigable(value) {
   return year >= 2000 && year <= 2100;
 }
 
-export default function DateJump({ date, basePath, paramName = 'date' }) {
+export default function DateJump({ date, basePath, paramName = 'date', extraParams }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  // Carried through the jump for the reason DateNav gives on the arrows: a
+  // filter set on this page has to survive changing the day on it.
+  const carried = new URLSearchParams(extraParams ?? {}).toString();
 
   return (
     <form method="GET" action={basePath} className="flex items-center gap-2">
@@ -67,7 +71,7 @@ export default function DateJump({ date, basePath, paramName = 'date' }) {
           const next = event.target.value;
           if (!isNavigable(next) || next === date) return;
           startTransition(() => {
-            router.push(`${basePath}?${paramName}=${next}`);
+            router.push(`${basePath}?${paramName}=${next}${carried ? `&${carried}` : ''}`);
           });
         }}
         className="input py-2"
@@ -77,6 +81,12 @@ export default function DateJump({ date, basePath, paramName = 'date' }) {
           appears - and answers "did that do anything?" on a slow connection,
           the same job the arrows' spinners already do. */}
       {isPending ? <Spinner className="text-ink-500" /> : null}
+
+      {/* The GET form posts only its own fields, so anything carried has to
+          be a field too or the no-JavaScript path loses the filter. */}
+      {Object.entries(extraParams ?? {}).map(([key, value]) => (
+        <input key={key} type="hidden" name={key} value={String(value)} />
+      ))}
 
       <noscript>
         <button type="submit" className="btn-secondary">

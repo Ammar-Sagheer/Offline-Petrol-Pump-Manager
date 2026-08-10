@@ -2,11 +2,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { requirePageRole, ROLES, formatPKR, formatLitres } from '@/app/_lib/helpers';
-import { getCustomerStatement, getLedgerEntries } from '@/app/_lib/data-service';
+import { getCustomerStatement, getLedgerEntriesPage } from '@/app/_lib/data-service';
 import PageHeader from '@/app/_components/ui/PageHeader';
 import PaymentForm from '@/app/_components/admin/PaymentForm';
 import LedgerAdjustmentForm from '@/app/_components/admin/LedgerAdjustmentForm';
 import CustomerLedgerTable from '@/app/_components/admin/CustomerLedgerTable';
+import EditCustomerButton from '@/app/_components/admin/EditCustomerButton';
+import Pager, { pageFrom } from '@/app/_components/ui/Pager';
 
 export async function generateMetadata({ params }) {
   const { id } = await params;
@@ -18,13 +20,22 @@ export async function generateMetadata({ params }) {
   }
 }
 
-export default async function CustomerDetailPage({ params }) {
+const PER_PAGE = 25;
+
+export default async function CustomerDetailPage({ params, searchParams }) {
   const profile = await requirePageRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
   const { id } = await params;
+  const page = pageFrom(await searchParams);
 
-  const [statement, entries] = await Promise.all([
+  /*
+   * The balance and the fuel breakdown come from the statement RPC, which sums
+   * over the whole ledger in Postgres - so paging the ENTRIES here changes only
+   * what is listed, never what is owed. That is what makes a database page safe
+   * on this screen and not on Purchases.
+   */
+  const [statement, { rows: entries, total: entryCount }] = await Promise.all([
     getCustomerStatement(id),
-    getLedgerEntries(id),
+    getLedgerEntriesPage(id, { page, perPage: PER_PAGE }),
   ]);
 
   const customer = statement?.customer;
@@ -40,6 +51,7 @@ export default async function CustomerDetailPage({ params }) {
         title={customer.name}
         description={[customer.vehicle_number, customer.phone].filter(Boolean).join(' · ') || null}
       >
+        <EditCustomerButton customer={customer} />
         <Link href="/admin/customers" className="btn-secondary">
           Back to customers
         </Link>
@@ -49,7 +61,7 @@ export default async function CustomerDetailPage({ params }) {
         <div className="space-y-6">
           {/* ---- balance ---- */}
           <section className="card p-5">
-            <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
+            <p className="figure-label">
               Currently owes
             </p>
             <p
@@ -72,7 +84,7 @@ export default async function CustomerDetailPage({ params }) {
 
             <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-ink-200 pt-4">
               <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">
+                <dt className="figure-label">
                   Fuel taken
                 </dt>
                 <dd className="tabular mt-0.5 text-lg font-semibold text-ink-900">
@@ -80,7 +92,7 @@ export default async function CustomerDetailPage({ params }) {
                 </dd>
               </div>
               <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">
+                <dt className="figure-label">
                   Paid back
                 </dt>
                 <dd className="tabular mt-0.5 text-lg font-semibold text-ink-900">
@@ -121,10 +133,18 @@ export default async function CustomerDetailPage({ params }) {
 
           {/* ---- history ---- */}
           <section>
-            <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-500">
+            <h2 className="section-heading">
               Transaction history
             </h2>
             <CustomerLedgerTable entries={entries} />
+
+            <Pager
+              page={page}
+              perPage={PER_PAGE}
+              total={entryCount}
+              hrefFor={(n) => `/admin/customers/${id}?page=${n}`}
+              label="Ledger pages"
+            />
           </section>
         </div>
 
@@ -133,7 +153,7 @@ export default async function CustomerDetailPage({ params }) {
           <PaymentForm customerId={customer.id} balance={balance} />
 
           {profile.role === ROLES.SUPER_ADMIN ? (
-            <LedgerAdjustmentForm customerId={customer.id} />
+            <LedgerAdjustmentForm customerId={customer.id} balance={balance} />
           ) : null}
 
           <p className="rounded-lg border border-ink-200 bg-ink-50 px-4 py-3 text-xs text-ink-600">

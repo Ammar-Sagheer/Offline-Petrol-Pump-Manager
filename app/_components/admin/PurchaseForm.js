@@ -122,7 +122,7 @@ export default function PurchaseForm({ tanks }) {
               ))}
             </select>
             {selectedTank ? (
-              <p className="mt-1 text-xs text-ink-500">
+              <p className="mt-1 text-sm text-ink-600">
                 Holds {litreFormat.format(selectedTank.current_stock_litres)} L of{' '}
                 {litreFormat.format(selectedTank.capacity_litres)} L —{' '}
                 <span className={spaceLeft < 0 ? 'font-semibold text-red-700' : 'font-semibold'}>
@@ -220,7 +220,7 @@ export default function PurchaseForm({ tanks }) {
 
           <div>
             <label className="label" htmlFor="invoice_number">
-              Invoice number <span className="font-normal text-ink-400">(optional)</span>
+              Invoice number <span className="font-normal text-ink-500">(optional)</span>
             </label>
             <input id="invoice_number" name="invoice_number" type="text" className="input" />
           </div>

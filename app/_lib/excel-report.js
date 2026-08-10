@@ -36,6 +36,7 @@ const SHEET_FILES = {
   Customers: 'xl/worksheets/sheet6.xml',
   Readings: 'xl/worksheets/sheet7.xml',
   Bank: 'xl/worksheets/sheet8.xml',
+  Lubricants: 'xl/worksheets/sheet9.xml',
 };
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -159,7 +160,9 @@ const num = (value) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const fuelLabel = (fuel) => (fuel === 'petrol' ? 'Petrol' : fuel === 'diesel' ? 'Diesel' : fuel ?? '');
+const FUEL_LABELS = { petrol: 'Petrol', diesel: 'Diesel', lubricant: 'Lubricant' };
+
+const fuelLabel = (fuel) => FUEL_LABELS[fuel] ?? fuel ?? '';
 
 /**
  * @param {object} data  the payload from the get_month_export RPC
@@ -176,6 +179,8 @@ export async function buildMonthlyWorkbook(data, { generatedOn, businessName } =
 
   const sales = data.sales ?? {};
   const purchases = data.purchases ?? {};
+  const lubricantSales = data.lubricant_sales ?? {};
+  const lubricantPurchases = data.lubricant_purchases ?? {};
   const bankMonth = data.bank_month ?? {};
   const [year, month] = String(data.from).slice(0, 10).split('-').map(Number);
 
@@ -186,24 +191,48 @@ export async function buildMonthlyWorkbook(data, { generatedOn, businessName } =
     ['Period', `${MONTHS[month - 1]} ${year}`],
     ['Generated', generatedOn ?? ''],
     ['', ''],
-    ['SALES', ''],
+    ['FUEL SALES', ''],
     ['Litres sold', num(sales.litres_sold)],
     ['Sales', num(sales.sale_amount)],
     ['Cash taken', num(sales.cash_amount)],
     ['Given on credit', num(sales.credit_amount)],
     ['', ''],
+    ['LUBRICANT SALES', ''],
+    ['Litres sold', num(lubricantSales.litres)],
+    ['Sales', num(lubricantSales.amount)],
+    ['Cash taken', num(lubricantSales.cash_amount)],
+    ['Given on credit', num(lubricantSales.credit_amount)],
+    // The drum on its own line. It is most of the sale COUNT and a small part
+    // of the money, so folded into the figures above it flatters neither.
+    ['  of which loose oil', num(lubricantSales.loose_amount)],
+    ['  loose oil sales', num(lubricantSales.loose_count)],
+    ['  loose oil litres', num(lubricantSales.loose_litres)],
+    ['', ''],
+    ['ALL SALES', num(data.total_sales)],
+    ['', ''],
     ['COSTS', ''],
     ['Fuel bought (litres)', num(purchases.quantity_litres)],
     ['Fuel bought (cost)', num(purchases.total_cost)],
-    ['Still owed to suppliers', num(purchases.pending_amount)],
+    ['Lubricants bought (litres)', num(lubricantPurchases.quantity_litres)],
+    ['Lubricants bought (cost)', num(lubricantPurchases.total_cost)],
+    ['  of which loose oil (litres)', num(lubricantPurchases.loose_litres)],
+    ['  of which loose oil (cost)', num(lubricantPurchases.loose_cost)],
+    [
+      'Still owed to suppliers',
+      num(purchases.pending_amount) + num(lubricantPurchases.pending_amount),
+    ],
     ['Expenses', num(data.expenses_total)],
     ['', ''],
-    ['PROFIT (sales - fuel bought - expenses)', num(data.profit)],
+    ['PROFIT (all sales - stock bought - expenses)', num(data.profit)],
     ['', ''],
     ['CLOSING STOCK', ''],
     ...(data.closing_inventory ?? []).map((tank) => [
       `  ${tank.name}`,
       num(tank.closing_litres),
+    ]),
+    ...(data.lubricant_stock ?? []).map((product) => [
+      `  ${product.name}`,
+      num(product.closing_litres),
     ]),
     ['', ''],
     // Bank movements sit apart from profit on purpose: paying cash into the
@@ -218,9 +247,10 @@ export async function buildMonthlyWorkbook(data, { generatedOn, businessName } =
       num(account.balance),
     ]),
     ['', ''],
-    ['Note', 'Profit counts fuel BOUGHT this month, not fuel sold from stock.'],
-    ['', 'A large delivery near month end makes profit look low - that money is'],
-    ['', 'sitting in the tank, shown as closing stock above.'],
+    ['Note', 'Profit counts stock BOUGHT this month - fuel and lubricants alike -'],
+    ['', 'not stock sold from the tank or the shelf. A large delivery near month'],
+    ['', 'end makes profit look low: that money is sitting in stock, shown as'],
+    ['', 'closing stock above.'],
   ];
 
   // Summary has no header row to preserve - it is all generated.
@@ -228,6 +258,10 @@ export async function buildMonthlyWorkbook(data, { generatedOn, businessName } =
   zip.file(SHEET_FILES.Summary, writeSheet(summaryXml, summaryRows, { keepRows: 0 }));
 
   // ---- Daily: what the three charts read ----
+  //
+  // The two lubricant columns sit after everything the charts point at, so the
+  // fixed ranges in the template keep meaning what they meant. Never insert a
+  // column before column G here.
   const dailyRows = (data.daily ?? []).map((day) => [
     toExcelDate(day.day),
     num(day.litres_sold),
@@ -236,6 +270,8 @@ export async function buildMonthlyWorkbook(data, { generatedOn, businessName } =
     num(day.sale_amount),
     num(day.cash_amount),
     num(day.credit_amount),
+    num(day.lubricant_litres),
+    num(day.lubricant_amount),
   ]);
   const dailyXml = await zip.file(SHEET_FILES.Daily).async('string');
   zip.file(SHEET_FILES.Daily, writeSheet(dailyXml, dailyRows));
@@ -310,6 +346,29 @@ export async function buildMonthlyWorkbook(data, { generatedOn, businessName } =
   });
   const bankXml = await zip.file(SHEET_FILES.Bank).async('string');
   zip.file(SHEET_FILES.Bank, writeSheet(bankXml, bankRows));
+
+  // ---- Lubricants ----
+  //
+  // Every counter sale in the month, one row each. Cash and credit are separate
+  // columns for the same reason they are on the Bank sheet: the split is the
+  // thing being checked, and a single total hides it.
+  const lubricantRows = (data.lubricant_rows ?? []).map((row) => [
+    toExcelDate(row.date),
+    row.name ?? '',
+    num(row.litres),
+    num(row.rate),
+    num(row.amount),
+    num(row.cash_amount),
+    num(row.credit_amount),
+    row.customer ?? '',
+    row.note ?? '',
+    // Which side of the business the row is. The name usually says so too, but
+    // a word in its own column is what makes the sheet filterable - the owner
+    // wanting "just the drum for August" should not have to trust a spelling.
+    row.sold_loose ? 'Loose' : 'Packed',
+  ]);
+  const lubricantsXml = await zip.file(SHEET_FILES.Lubricants).async('string');
+  zip.file(SHEET_FILES.Lubricants, writeSheet(lubricantsXml, lubricantRows));
 
   return zip.generateAsync({
     type: 'nodebuffer',

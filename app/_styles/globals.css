@@ -92,11 +92,11 @@ input[type='number']::-webkit-inner-spin-button {
   }
 
   .label {
-    @apply mb-1 block text-sm font-medium text-ink-700;
+    @apply mb-1 block text-base font-medium text-ink-700;
   }
 
   .input {
-    @apply w-full rounded-lg border border-ink-300 bg-white px-3 py-2.5 text-ink-900
+    @apply w-full rounded-lg border border-ink-300 bg-white px-3 py-3 text-base text-ink-900
            shadow-sm outline-none transition
            placeholder:text-ink-400
            focus:border-brand-500 focus:ring-2 focus:ring-brand-200
@@ -105,7 +105,7 @@ input[type='number']::-webkit-inner-spin-button {
 
   /* Meter readings and money: bigger and tabular, so a typo is easy to spot. */
   .input-number {
-    @apply w-full rounded-lg border border-ink-300 bg-white px-3 py-2.5 text-lg
+    @apply w-full rounded-lg border border-ink-300 bg-white px-3 py-3 text-xl
            font-semibold text-ink-900 shadow-sm outline-none transition
            placeholder:text-ink-400
            focus:border-brand-500 focus:ring-2 focus:ring-brand-200
@@ -114,23 +114,39 @@ input[type='number']::-webkit-inner-spin-button {
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5
-           text-sm font-semibold transition
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3
+           text-base font-semibold transition
            focus-visible:outline-2 focus-visible:outline-offset-2
            disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  /*
+   * The border here is INVISIBLE AND LOAD-BEARING. It is the same colour as
+   * the fill, and it exists only so a primary is the same height as the
+   * secondary and danger buttons beside it.
+   *
+   * Without it this was 48px against their 50px, because those two carry a 1px
+   * border and this did not. Every place in the app where a filled button sits
+   * next to an outlined one - "Manage lubricants" beside "Record a lubricant
+   * sale", every dialog's Save beside Cancel - the pair were two pixels apart
+   * and, being centred in a flex row, sitting a pixel off each other's
+   * baseline. Small enough to never look like a bug and large enough to make
+   * the row look wrong, which is how the owner reported it: the green ones are
+   * "a bit larger".
+   *
+   * Change the fill and this must change with it.
+   */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg
-           bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition
-           hover:bg-brand-700
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border
+           border-brand-600 bg-brand-600 px-4 py-3 text-base font-semibold text-white transition
+           hover:border-brand-700 hover:bg-brand-700
            focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600
            disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-lg border
-           border-ink-300 bg-white px-4 py-2.5 text-sm font-semibold text-ink-800
+           border-ink-300 bg-white px-4 py-3 text-base font-semibold text-ink-800
            transition hover:bg-ink-50
            focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-500
            disabled:cursor-not-allowed disabled:opacity-50;
@@ -138,28 +154,97 @@ input[type='number']::-webkit-inner-spin-button {
 
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2 rounded-lg border
-           border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700
+           border-red-300 bg-white px-4 py-3 text-base font-semibold text-red-700
            transition hover:bg-red-50
            focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600
            disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  /*
+   * The nav column's scrollbar, for the windows where twelve sections do not
+   * fit at once.
+   *
+   * NOT `overflow: hidden`. Sign out is the last thing in that column, and a
+   * list that silently ends above it is worse than a scrollbar - the owner
+   * would have no way to sign out and nothing on screen to say why. The height
+   * is trimmed elsewhere so this fires only on genuinely short windows; when it
+   * does, this makes it a 6px hairline instead of the browser's default slab,
+   * which on Windows is 15px of grey permanently down the side of the nav.
+   */
+  .nav-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ink-300) transparent;
+  }
+
+  .nav-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .nav-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .nav-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--color-ink-300);
+    border-radius: 9999px;
+  }
+
   .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold;
+  }
+
+  /*
+   * The heading that names a block on a page - "Tank stock", "Previous
+   * checks", "Fuel prices".
+   *
+   * The spacing is part of the class on purpose. Written out by hand it had
+   * drifted: of nineteen of these, nine carried a top margin and ten did not,
+   * so a heading like "Previous checks" sat flush against the card above it
+   * while the identical heading two pages away had room to breathe.
+   *
+   * `first:mt-0` is what makes one class cover both cases. A heading that
+   * opens a column or a section is the first child of its container and wants
+   * no space above it; one that follows a block of content is not, and gets
+   * the full gap. Adjacent margins collapse, so a preceding `mb-6` does not
+   * add to this - the larger of the two wins.
+   */
+  .section-heading {
+    @apply mb-3 mt-8 text-sm font-bold uppercase tracking-wide text-ink-600 first:mt-0;
+  }
+
+  /*
+   * A small caption over a figure - "FUEL SOLD" over "412.25 L". This pattern
+   * is everywhere: the stat strips on Readings, Lubricants and the Dashboard,
+   * the figures on a nozzle row, the cash/credit summary in the entry dialog.
+   *
+   * It used to be written out by hand at each site and had drifted down to
+   * 10.4px in the nozzle rows - uppercase, grey, and the smallest text in the
+   * app, sitting over the numbers that get checked against cash in a drawer.
+   * These two classes are the pattern in one place, at a size that survives a
+   * dim office: the caption no smaller than 12px and a darker grey, the figure
+   * itself larger than the label above it.
+   */
+  .figure-label {
+    @apply text-xs font-semibold uppercase tracking-wide text-ink-600;
+  }
+
+  .figure-value {
+    @apply text-lg font-bold text-ink-900;
+    font-variant-numeric: tabular-nums;
   }
 
   .th {
-    @apply px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-500;
+    @apply px-3 py-3 text-left text-sm font-semibold uppercase tracking-wide text-ink-600;
   }
 
   .td {
-    @apply px-3 py-2.5 text-sm text-ink-800;
+    @apply px-3 py-3 text-base text-ink-800;
   }
 
   /* Figures never wrap - "Rs 2,500,000" split across two lines is unreadable,
      and "10,000 L" broken after the number looks like two separate values. */
   .td-num {
-    @apply whitespace-nowrap px-3 py-2.5 text-right text-sm font-medium text-ink-800;
+    @apply whitespace-nowrap px-3 py-3 text-right text-base font-medium text-ink-800;
     font-variant-numeric: tabular-nums;
   }
 
