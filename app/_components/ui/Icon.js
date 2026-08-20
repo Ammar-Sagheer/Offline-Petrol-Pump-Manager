@@ -1,189 +1,163 @@
+import DashboardOutlined from '@mui/icons-material/DashboardOutlined';
+import SpeedOutlined from '@mui/icons-material/SpeedOutlined';
+import WaterDropOutlined from '@mui/icons-material/WaterDropOutlined';
+import LocalShippingOutlined from '@mui/icons-material/LocalShippingOutlined';
+import PropaneTankOutlined from '@mui/icons-material/PropaneTankOutlined';
+import GroupOutlined from '@mui/icons-material/GroupOutlined';
+import AccountBalanceOutlined from '@mui/icons-material/AccountBalanceOutlined';
+import AccountBalanceWalletOutlined from '@mui/icons-material/AccountBalanceWalletOutlined';
+import BarChartOutlined from '@mui/icons-material/BarChartOutlined';
+import TuneOutlined from '@mui/icons-material/TuneOutlined';
+import WorkOutlineOutlined from '@mui/icons-material/WorkOutlineOutlined';
+import DirectionsCarOutlined from '@mui/icons-material/DirectionsCarOutlined';
+import BuildOutlined from '@mui/icons-material/BuildOutlined';
+import ApartmentOutlined from '@mui/icons-material/ApartmentOutlined';
+import DesktopWindowsOutlined from '@mui/icons-material/DesktopWindowsOutlined';
+import LabelOutlined from '@mui/icons-material/LabelOutlined';
+import CheckOutlined from '@mui/icons-material/CheckOutlined';
+import EditOutlined from '@mui/icons-material/EditOutlined';
+import DeleteOutlineOutlined from '@mui/icons-material/DeleteOutlineOutlined';
+import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined';
+import HistoryOutlined from '@mui/icons-material/HistoryOutlined';
+import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined';
+import MenuOutlined from '@mui/icons-material/MenuOutlined';
+import CloseOutlined from '@mui/icons-material/CloseOutlined';
+import PersonOutlineOutlined from '@mui/icons-material/PersonOutlineOutlined';
+import LogoutOutlined from '@mui/icons-material/LogoutOutlined';
+import WarningAmberOutlined from '@mui/icons-material/WarningAmberOutlined';
+import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined';
+import LocalGasStationOutlined from '@mui/icons-material/LocalGasStationOutlined';
+import SellOutlined from '@mui/icons-material/SellOutlined';
+import LocalAtmOutlined from '@mui/icons-material/LocalAtmOutlined';
+import CreditCardOutlined from '@mui/icons-material/CreditCardOutlined';
+import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined';
+import TrendingUpOutlined from '@mui/icons-material/TrendingUpOutlined';
+import EventOutlined from '@mui/icons-material/EventOutlined';
+import CallReceivedOutlined from '@mui/icons-material/CallReceivedOutlined';
+import CallMadeOutlined from '@mui/icons-material/CallMadeOutlined';
+
 /**
- * The app's icons, drawn inline rather than pulled from a package.
+ * The app's icons, backed by Material UI (`@mui/icons-material`, Outlined
+ * variant throughout) at the owner's request. This file is still the single
+ * place that decides what a name means - every call site in the app writes
+ * `<Icon name="tank" className="h-5 w-5" />` exactly as it did with the old
+ * hand-drawn set, so swapping the icon package cost this file only. Adding a
+ * name means adding an import and a line in `COMPONENTS` below.
  *
- * WHY NOT AN ICON LIBRARY. There are seventeen icons in here. Lucide or Heroicons
- * would add a dependency and a bundle for that, and every icon in a library is
- * a decision someone else made about what a "tank" looks like. Drawing them
- * here keeps the set small, keeps them on the same 24px grid and the same
- * stroke weight, and means adding one is editing this file rather than
- * shopping.
- *
- * WHY ICONS AT ALL. The app was entirely text: ten identically-shaped nav tabs,
- * and statuses told apart by two letters and a colour. That asks the reader to
- * parse a word every time, and it leans on colour alone for the difference
- * between a nozzle that is done and one that is not - which is exactly what
- * fades in a dim pump office and what a red-green colourblind reader cannot
- * see. An icon beside the word gives a second, redundant cue: shape.
+ * WHY ICONS AT ALL. The app was entirely text: ten identically-shaped nav
+ * tabs, and statuses told apart by two letters and a colour. That asks the
+ * reader to parse a word every time, and it leans on colour alone for the
+ * difference between a nozzle that is done and one that is not - which is
+ * exactly what fades in a dim pump office and what a red-green colourblind
+ * reader cannot see. An icon beside the word gives a second, redundant cue:
+ * shape.
  *
  * They are decoration, never the only carrier of meaning - every icon here
- * sits next to its own label, and is aria-hidden so a screen reader is not
+ * sits next to its own label, and is `aria-hidden` so a screen reader is not
  * made to announce it twice. The single exception is `trash` inside an
- * IconButton, which carries its label in aria-label and title instead; the
- * reasoning is written up there.
+ * IconButton, which carries its label in `aria-label` and `title` instead;
+ * the reasoning is written up there.
  *
- * Everything is `currentColor` and 1.75 stroke, so an icon takes the colour and
- * the weight of the text it sits beside without being told.
+ * SIZING. `Icon` renders a fixed-size wrapper `<span>` (sized by the
+ * `className` utility, e.g. `h-5 w-5`) with the MUI icon stretched to fill it
+ * via an inline style. MUI's own `SvgIcon` sizes itself in `em` off the
+ * ambient font-size through its own (Emotion-generated) CSS class, which can
+ * land after Tailwind's utility classes in the stylesheet and win the
+ * cascade - so trusting Tailwind's `h-5 w-5` on the icon directly was not
+ * reliable. An inline style on the icon itself always wins, so the wrapper
+ * is what carries the actual size and the icon just fills it. Colour is
+ * untouched - no `color` prop is passed, so it keeps inheriting
+ * `currentColor` from whatever text the icon sits beside, same as before.
  */
-const PATHS = {
-  // Dashboard: a roof over a room - "the whole place at a glance".
-  dashboard: (
-    <>
-      <path d="M3 10.5 12 3.5l9 7" />
-      <path d="M5.5 9.5V20h13V9.5" />
-      <path d="M9.5 20v-5.5h5V20" />
-    </>
-  ),
+const COMPONENTS = {
+  // Dashboard.
+  dashboard: DashboardOutlined,
   // Readings: a dial with a needle - the pump meter.
-  readings: (
-    <>
-      <path d="M4 18.5a8.5 8.5 0 1 1 16 0" />
-      <path d="m12 14.5 3.5-3.5" />
-      <circle cx="12" cy="18.5" r="1.4" />
-    </>
-  ),
+  readings: SpeedOutlined,
+  // Fuel: a pump. Shared by anything counting litres sold, not just Readings.
+  fuelPump: LocalGasStationOutlined,
   // Lubricants: a drop of oil.
-  lubricants: <path d="M12 3.6c3.4 3.9 5.4 6.5 5.4 9a5.4 5.4 0 0 1-10.8 0c0-2.5 2-5.1 5.4-9Z" />,
+  lubricants: WaterDropOutlined,
   // Purchases: a delivery truck.
-  purchases: (
-    <>
-      <path d="M3 7.5h10.5v9H3z" />
-      <path d="M13.5 10.5h3.2l2.8 3.1v2.9h-6z" />
-      <circle cx="7" cy="18.5" r="1.7" />
-      <circle cx="16.5" cy="18.5" r="1.7" />
-    </>
-  ),
-  // Stock: a storage tank.
-  stock: (
-    <>
-      <path d="M4.5 7c0-1.6 3.4-2.8 7.5-2.8S19.5 5.4 19.5 7v10c0 1.6-3.4 2.8-7.5 2.8S4.5 18.6 4.5 17z" />
-      <path d="M4.5 7c0 1.6 3.4 2.8 7.5 2.8S19.5 8.6 19.5 7" />
-    </>
-  ),
+  purchases: LocalShippingOutlined,
+  // Stock: a storage tank - also used for "the drum" on Lubricants.
+  stock: PropaneTankOutlined,
   // Customers: the people who take fuel on credit.
-  customers: (
-    <>
-      <circle cx="9" cy="8" r="3.3" />
-      <path d="M2.8 19.5a6.2 6.2 0 0 1 12.4 0" />
-      <path d="M16.5 5.2a3.3 3.3 0 0 1 0 6.4" />
-      <path d="M17 13.6a6.2 6.2 0 0 1 4.2 5.9" />
-    </>
-  ),
+  customers: GroupOutlined,
   // Banking: the pillared front of a bank.
-  banking: (
-    <>
-      <path d="M3 9.5 12 4.5l9 5" />
-      <path d="M5.5 11v7.5M10 11v7.5M14 11v7.5M18.5 11v7.5" />
-      <path d="M3 20.5h18" />
-    </>
-  ),
+  banking: AccountBalanceOutlined,
   // Expenses: a wallet - money going out.
-  expenses: (
-    <>
-      <path d="M3.5 8.5A2 2 0 0 1 5.5 6.5H17v2" />
-      <path d="M3.5 8.5v9a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-7h-15" />
-      <circle cx="16.5" cy="14" r="1.1" />
-    </>
-  ),
-  // Reports: the month as bars.
-  reports: (
-    <>
-      <path d="M3.5 20h17" />
-      <path d="M6.5 20v-6M11 20V6.5M15.5 20v-9M20 20v-4" />
-    </>
-  ),
+  expenses: AccountBalanceWalletOutlined,
+  // Reports: a bar chart.
+  reports: BarChartOutlined,
   // Settings: sliders, not a cog - a cog at 18px is mush.
-  settings: (
-    <>
-      <path d="M4 7h8M16.5 7H20M4 12h3.5M12 12h8M4 17h8M16.5 17H20" />
-      <circle cx="14.2" cy="7" r="1.8" />
-      <circle cx="9.7" cy="12" r="1.8" />
-      <circle cx="14.2" cy="17" r="1.8" />
-    </>
-  ),
+  settings: TuneOutlined,
+  // Company assets: a briefcase - property the business holds, not stock it
+  // sells through.
+  assets: WorkOutlineOutlined,
+  // Vehicle: a car, for the delivery bike or the owner's own runabout.
+  vehicle: DirectionsCarOutlined,
+  // Machinery: a wrench, not a cog - the same reasoning settings gives.
+  machinery: BuildOutlined,
+  // Property: a small building, distinct from the roof-only dashboard mark.
+  property: ApartmentOutlined,
+  // Electronics: a monitor.
+  electronics: DesktopWindowsOutlined,
+  // Other: a tag, for anything the five categories don't quite name.
+  other: LabelOutlined,
   // Done. Paired with a word, never on its own.
-  check: <path d="m5 12.5 4.5 4.5L19 7" />,
+  check: CheckOutlined,
   // Still to do.
-  pencil: (
-    <>
-      <path d="M4 20h4L18.5 9.5a2.05 2.05 0 0 0-2.9-2.9L5 17.2z" />
-      <path d="m15 8 3 3" />
-    </>
-  ),
-  // Trash: a bin with a lid and a handle. The one icon here that is allowed to
-  // stand without a word beside it - see IconButton for why.
-  trash: (
-    <>
-      <path d="M4 7h16" />
-      <path d="M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7" />
-      <path d="M6.5 7v12.3A1.7 1.7 0 0 0 8.2 21h7.6a1.7 1.7 0 0 0 1.7-1.7V7" />
-      <path d="M10.5 11v6" />
-      <path d="M13.5 11v6" />
-    </>
-  ),
+  pencil: EditOutlined,
+  // Trash: the one icon here allowed to stand without a word beside it -
+  // see IconButton for why.
+  trash: DeleteOutlineOutlined,
   // Guide: an open book.
-  guide: (
-    <>
-      <path d="M12 6.8C10.4 5.5 8.4 4.9 5.5 4.9c-.8 0-1.5.6-1.5 1.4v10.4c0 .8.7 1.4 1.5 1.4 2.9 0 4.9.6 6.5 1.9" />
-      <path d="M12 6.8c1.6-1.3 3.6-1.9 6.5-1.9.8 0 1.5.6 1.5 1.4v10.4c0 .8-.7 1.4-1.5 1.4-2.9 0-4.9.6-6.5 1.9" />
-      <path d="M12 6.8V20" />
-    </>
-  ),
-  // Activity: a clock turning back - the section is a history, not a list.
-  activity: (
-    <>
-      <circle cx="12" cy="12.5" r="7.5" />
-      <path d="M12 8.5v4l2.8 1.8" />
-      <path d="M4.5 6.5v3.2h3.2" />
-    </>
-  ),
-  chevronRight: <path d="m9.5 5.5 6.5 6.5-6.5 6.5" />,
-  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
-  close: <path d="m6 6 12 12M18 6 6 18" />,
-  account: (
-    <>
-      <circle cx="12" cy="8.5" r="3.6" />
-      <path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" />
-    </>
-  ),
-  signOut: (
-    <>
-      <path d="M14.5 4.5h3a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-3" />
-      <path d="M10 8.5 6 12l4 3.5" />
-      <path d="M6 12h9" />
-    </>
-  ),
-  warning: (
-    <>
-      <path d="M12 4.5 21 19.5H3z" />
-      <path d="M12 10v4" />
-      <circle cx="12" cy="17" r="0.9" />
-    </>
-  ),
+  guide: MenuBookOutlined,
+  // Activity: a history clock - the section is a log, not a list.
+  activity: HistoryOutlined,
+  chevronRight: ChevronRightOutlined,
+  menu: MenuOutlined,
+  close: CloseOutlined,
+  account: PersonOutlineOutlined,
+  signOut: LogoutOutlined,
+  warning: WarningAmberOutlined,
+  // List: a running total of many records (invoices, customers), not any
+  // one figure.
+  list: DescriptionOutlined,
+  // Sales: a price tag.
+  sales: SellOutlined,
+  // Cash: coins/notes in hand.
+  cash: LocalAtmOutlined,
+  // Credit: a card, for money not yet collected.
+  credit: CreditCardOutlined,
+  // Inventory: boxed stock, e.g. packed lubricants on the shelf.
+  inventory: Inventory2Outlined,
+  // Profit: the trend line going up.
+  profit: TrendingUpOutlined,
+  // Date: a calendar day, for "most recent" figures.
+  date: EventOutlined,
+  // Money in / money out. An arrow coming toward you and one going away -
+  // the shape that tells the two directions apart when the colour alone
+  // (green against amber) cannot, in a dim office or for a colourblind
+  // reader.
+  moneyIn: CallReceivedOutlined,
+  moneyOut: CallMadeOutlined,
 };
 
 /**
  * @param {object} props
- * @param {keyof typeof PATHS} props.name
+ * @param {keyof typeof COMPONENTS} props.name
  * @param {string} [props.className] - size it with height and width utilities;
  *   colour is inherited from the surrounding text.
  */
 export default function Icon({ name, className = 'h-5 w-5' }) {
-  const path = PATHS[name];
-  if (!path) return null;
+  const Component = COMPONENTS[name];
+  if (!Component) return null;
 
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`shrink-0 ${className}`}
-      aria-hidden="true"
-      focusable="false"
-    >
-      {path}
-    </svg>
+    <span className={`inline-flex shrink-0 ${className}`} aria-hidden="true">
+      <Component style={{ width: '100%', height: '100%' }} />
+    </span>
   );
 }

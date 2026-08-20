@@ -34,7 +34,10 @@ import {
   formatLitresFine,
   formatPKR,
   formatRate,
+  shiftISODate,
+  formatDate,
 } from './helpers';
+import { ASSET_CATEGORIES } from './asset-categories';
 
 // ---------------------------------------------------------------------------
 // Small input helpers
@@ -590,6 +593,7 @@ export async function createStockCheck(_prevState, formData) {
 
   const tankId = text(formData, 'tank_id');
   const checkDate = text(formData, 'check_date');
+  const taken = text(formData, 'taken') === 'evening' ? 'evening' : 'morning';
   const actualDip = number(formData, 'actual_dip_reading');
   const note = text(formData, 'note');
 
@@ -597,22 +601,33 @@ export async function createStockCheck(_prevState, formData) {
   if (!checkDate) return fail('Enter the date of the dip.');
   if (actualDip === null || actualDip < 0) return fail('Enter the measured dip reading.');
 
+  /*
+   * A dip is a moment, not a day. The pump dips first thing in the morning,
+   * before the pumps are switched on, so a dip dated the 11th measures the
+   * tank as it stood at the CLOSE OF THE 10TH - and that is the day its
+   * gain/loss belongs to. See migration 026; the database generates the same
+   * figure into `books_date` and reports on it.
+   */
+  const closesDate = taken === 'morning' ? shiftISODate(checkDate, -1) : checkDate;
+
   let expected;
   try {
     expected = await withUser(profile.id, async (client) => {
       // Expected stock is worked out by the database, never sent from the
       // browser - otherwise the gain/loss figure could be made to say
-      // anything.
+      // anything. The database recomputes it from history on the way in as
+      // well, so this value is what the message below reports rather than the
+      // last word on what gets stored.
       const { rows } = await client.query('select calculate_expected_stock($1, $2) as expected', [
         tankId,
-        checkDate,
+        closesDate,
       ]);
       const expectedStock = rows[0]?.expected ?? 0;
 
       await client.query(
-        `insert into stock_checks (tank_id, check_date, expected_stock, actual_dip_reading, note, created_by)
-         values ($1, $2, $3, $4, $5, $6)`,
-        [tankId, checkDate, expectedStock, actualDip, note || null, profile.id],
+        `insert into stock_checks (tank_id, check_date, taken, expected_stock, actual_dip_reading, note, created_by)
+         values ($1, $2, $3, $4, $5, $6, $7)`,
+        [tankId, checkDate, taken, expectedStock, actualDip, note || null, profile.id],
       );
 
       return expectedStock;
@@ -625,12 +640,48 @@ export async function createStockCheck(_prevState, formData) {
   revalidatePath('/admin/stock-checks');
   revalidatePath('/admin');
 
-  if (difference === 0) return ok('Saved. Stock matches the books exactly.');
+  const closes = `Checked against ${formatDate(closesDate)}.`;
+  if (difference === 0) return ok(`Saved. Stock matches the books exactly. ${closes}`);
   return ok(
     difference > 0
-      ? `Saved. Gain of ${difference} L against the books.`
-      : `Saved. Loss of ${Math.abs(difference)} L against the books.`,
+      ? `Saved. Gain of ${difference} L against the books. ${closes}`
+      : `Saved. Loss of ${Math.abs(difference)} L against the books. ${closes}`,
   );
+}
+
+/**
+ * Removes a dip. Owner only, and the way a mistyped rod reading gets corrected:
+ * clear it and record it again, the same shape as deleting a purchase or
+ * clearing a day on Readings.
+ *
+ * There is no edit. A dip is two figures and a note, so re-entering it is no
+ * slower than editing it - and it keeps one code path for "what a dip is worth"
+ * rather than two that could drift apart. Everything downstream is recalculated
+ * from history by trigger, so the dips AFTER this one re-base themselves onto
+ * whatever is left behind it.
+ */
+export async function deleteStockCheck(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const checkId = text(formData, 'check_id');
+  if (!checkId) return fail('Missing the dip.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query('delete from stock_checks where id = $1', [checkId]),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not clear the dip.'));
+  }
+
+  revalidatePath('/admin/stock-checks');
+  revalidatePath('/admin');
+  return ok('Dip cleared. Record the corrected reading now.');
 }
 
 // ---------------------------------------------------------------------------
@@ -2009,6 +2060,115 @@ export async function deleteBankTransaction(_prevState, formData) {
 
   revalidatePath('/admin/banking');
   return ok('Transaction removed.');
+}
+
+// ---------------------------------------------------------------------------
+// Company assets - super_admin only
+//
+// What the pump has bought and kept, not spending or takings. See migration
+// 025 - the same treatment as banking, in both the database and here.
+// ---------------------------------------------------------------------------
+
+// Derived from the shared list rather than typed out again here, so a
+// category added to asset-categories.js is valid the moment it exists instead
+// of being silently refused by a second, forgotten copy of the same five
+// words.
+const ASSET_CATEGORY_VALUES = ASSET_CATEGORIES.map((category) => category.value);
+
+export async function createCompanyAsset(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const name = text(formData, 'name');
+  const category = text(formData, 'category') || 'other';
+  const purchaseValue = number(formData, 'purchase_value');
+  const purchaseDate = text(formData, 'purchase_date');
+  const note = text(formData, 'note');
+
+  if (!name) return fail('Enter what was bought.');
+  if (!ASSET_CATEGORY_VALUES.includes(category)) return fail('Choose a category.');
+  if (purchaseValue === null || purchaseValue <= 0) return fail('Enter what it cost, above zero.');
+  if (!purchaseDate) return fail('Enter the date it was bought.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query(
+        `insert into company_assets (name, category, purchase_value, purchase_date, note, created_by)
+         values ($1, $2, $3, $4, $5, $6)`,
+        [name, category, purchaseValue, purchaseDate, note || null, profile.id],
+      ),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not record the asset.'));
+  }
+
+  revalidatePath('/admin/company-assets');
+  return ok(`${name} added.`);
+}
+
+export async function updateCompanyAsset(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const assetId = text(formData, 'asset_id');
+  const name = text(formData, 'name');
+  const category = text(formData, 'category') || 'other';
+  const purchaseValue = number(formData, 'purchase_value');
+  const purchaseDate = text(formData, 'purchase_date');
+  const note = text(formData, 'note');
+
+  if (!assetId) return fail('Missing the asset.');
+  if (!name) return fail('Enter what was bought.');
+  if (!ASSET_CATEGORY_VALUES.includes(category)) return fail('Choose a category.');
+  if (purchaseValue === null || purchaseValue <= 0) return fail('Enter what it cost, above zero.');
+  if (!purchaseDate) return fail('Enter the date it was bought.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query(
+        `update company_assets
+            set name = $2, category = $3, purchase_value = $4, purchase_date = $5, note = $6
+          where id = $1`,
+        [assetId, name, category, purchaseValue, purchaseDate, note || null],
+      ),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not save the changes.'));
+  }
+
+  revalidatePath('/admin/company-assets');
+  return ok('Changes saved.');
+}
+
+export async function deleteCompanyAsset(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const assetId = text(formData, 'asset_id');
+  if (!assetId) return fail('Missing the asset.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query('delete from company_assets where id = $1', [assetId]),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not remove the asset.'));
+  }
+
+  revalidatePath('/admin/company-assets');
+  return ok('Asset removed.');
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { requirePageRole, ROLES, formatPKR, formatLitres } from '@/app/_lib/helpers';
@@ -9,6 +8,9 @@ import LedgerAdjustmentForm from '@/app/_components/admin/LedgerAdjustmentForm';
 import CustomerLedgerTable from '@/app/_components/admin/CustomerLedgerTable';
 import EditCustomerButton from '@/app/_components/admin/EditCustomerButton';
 import Pager, { pageFrom } from '@/app/_components/ui/Pager';
+import FuelBadge from '@/app/_components/ui/FuelBadge';
+import { fuelColor } from '@/app/_lib/fuel-colors';
+import Button from '@/app/_components/ui/Button';
 
 export async function generateMetadata({ params }) {
   const { id } = await params;
@@ -52,9 +54,9 @@ export default async function CustomerDetailPage({ params, searchParams }) {
         description={[customer.vehicle_number, customer.phone].filter(Boolean).join(' · ') || null}
       >
         <EditCustomerButton customer={customer} />
-        <Link href="/admin/customers" className="btn-secondary">
+        <Button variant="secondary" href="/admin/customers">
           Back to customers
-        </Link>
+        </Button>
       </PageHeader>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem] [&>*]:min-w-0">
@@ -106,27 +108,28 @@ export default async function CustomerDetailPage({ params, searchParams }) {
           {statement.fuel_taken?.length > 0 ? (
             <section className="card p-5">
               <h2 className="mb-3 text-sm font-bold text-ink-900">Fuel taken in total</h2>
+              {/* These two tiles used to hard-code `bg-sky-50` for petrol and
+                  `bg-amber-50` for diesel, which is precisely the drift
+                  fuel-colors.js exists to stop - the fuels changed to blue and
+                  orange everywhere else and this corner stayed on the old
+                  pair. It reads from the module now, and wears the badge
+                  rather than its own hand-written label. */}
               <div className="grid gap-3 sm:grid-cols-2">
-                {statement.fuel_taken.map((row) => (
-                  <div
-                    key={row.fuel_type}
-                    className={`rounded-lg p-3 ${
-                      row.fuel_type === 'petrol' ? 'bg-sky-50' : 'bg-amber-50'
-                    }`}
-                  >
-                    <p
-                      className={`text-xs font-semibold uppercase tracking-wide ${
-                        row.fuel_type === 'petrol' ? 'text-sky-800' : 'text-amber-900'
-                      }`}
+                {statement.fuel_taken.map((row) => {
+                  const color = fuelColor(row.fuel_type);
+                  return (
+                    <div
+                      key={row.fuel_type}
+                      className={`rounded-lg border-l-4 bg-ink-50 p-3 ${color.border}`}
                     >
-                      {row.fuel_type === 'petrol' ? 'Petrol' : 'Diesel'}
-                    </p>
-                    <p className="tabular mt-1 text-xl font-bold text-ink-900">
-                      {formatLitres(row.litres)}
-                    </p>
-                    <p className="tabular text-sm text-ink-600">{formatPKR(row.amount)}</p>
-                  </div>
-                ))}
+                      <FuelBadge fuelType={row.fuel_type} />
+                      <p className="tabular mt-2 text-xl font-bold text-ink-900">
+                        {formatLitres(row.litres)}
+                      </p>
+                      <p className="tabular text-sm text-ink-600">{formatPKR(row.amount)}</p>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           ) : null}

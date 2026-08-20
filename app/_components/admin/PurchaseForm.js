@@ -10,6 +10,7 @@ import Dialog from '@/app/_components/ui/Dialog';
 import { todayISO } from '@/app/_lib/date-helpers';
 import NumberInput from '@/app/_components/ui/NumberInput';
 import { formatRate } from '@/app/_lib/format-helpers';
+import Button from '@/app/_components/ui/Button';
 
 const litreFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
@@ -79,19 +80,18 @@ export default function PurchaseForm({ tanks }) {
 
   return (
     <>
-      <button
+      <Button variant="primary"
         type="button"
         onClick={() => {
           setShowResult(false);
           setIsOpen(true);
         }}
-        className="btn-primary"
       >
         <span aria-hidden="true" className="text-base leading-none">
           +
         </span>
         Record a delivery
-      </button>
+      </Button>
 
       <Dialog open={isOpen} onClose={() => setIsOpen(false)} title="Record a delivery">
         <form
@@ -243,12 +243,12 @@ export default function PurchaseForm({ tanks }) {
           <FormMessage state={showResult ? state : null} />
 
           <div className="flex gap-2 border-t border-ink-200 pt-4">
-            <SubmitButton className="btn-primary flex-1" pendingLabel="Saving…">
+            <SubmitButton className="flex-1"  pendingLabel="Saving…">
               Save delivery
             </SubmitButton>
-            <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={() => setIsOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

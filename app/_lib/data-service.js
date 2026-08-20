@@ -10,7 +10,8 @@
 import 'server-only';
 import { withUser } from './db';
 import { getSessionProfile } from './auth';
-import { todayISO } from './date-helpers';
+import { todayISO, shiftISODate } from './date-helpers';
+import { byFuelOrder } from './fuel-colors';
 
 /** Every read runs with the signed-in user's id set, so RLS applies as them. */
 async function withDb(fn) {
@@ -36,10 +37,18 @@ async function one(client, sql, params, what) {
 // Configuration: tanks, nozzles, prices
 // ---------------------------------------------------------------------------
 
+/*
+ * Diesel first, then petrol - the order the pump itself is laid out in, which
+ * is what the person reading the screen has in his head. `order by fuel_type`
+ * cannot give it: fuel_type is an enum declared petrol-first in migration 001,
+ * and Postgres orders enums by declaration. Sorted here so a display choice
+ * stays out of the schema. See FUEL_ORDER in app/_lib/fuel-colors.js.
+ */
 export async function getTanks() {
-  return withDb((client) =>
-    rows(client, 'select * from tanks order by fuel_type', [], 'the tanks'),
+  const tanks = await withDb((client) =>
+    rows(client, 'select * from tanks', [], 'the tanks'),
   );
+  return [...tanks].sort(byFuelOrder);
 }
 
 export async function getNozzles() {
@@ -389,14 +398,27 @@ export async function getExpectedStock(tankId, date) {
   });
 }
 
-/** Expected stock for every tank on a date, ready for the stock check form. */
+/*
+ * Expected stock for every tank, ready for the stock check form.
+ *
+ * TWO figures per tank, not one. A dip taken on the morning of the 11th closes
+ * the 10th; one taken after the pumps stop on the 11th closes the 11th. Which
+ * of the two the form is asking about is a choice the person recording it makes
+ * on screen, so both arrive with the page and the card shows whichever is
+ * selected - rather than a round trip to the server for a number that was
+ * already one query away.
+ */
 export async function getExpectedStockForAllTanks(date) {
   const tanks = await getTanks();
+  const previous = shiftISODate(date, -1);
   return Promise.all(
-    tanks.map(async (tank) => ({
-      ...tank,
-      expected_stock: await getExpectedStock(tank.id, date),
-    })),
+    tanks.map(async (tank) => {
+      const [ifEvening, ifMorning] = await Promise.all([
+        getExpectedStock(tank.id, date),
+        getExpectedStock(tank.id, previous),
+      ]);
+      return { ...tank, expected_if_evening: ifEvening, expected_if_morning: ifMorning };
+    }),
   );
 }
 
@@ -544,6 +566,115 @@ export async function getFirstTradingDay() {
   });
 }
 
+/**
+ * The Daily Sale & Stock Register: one row per tank per day over a range.
+ *
+ * Rows come back ordered by fuel then day, which is the order they are read -
+ * a register is read down a column, and the cumulative figures on it only mean
+ * anything in date order. The page groups by tank without re-sorting.
+ *
+ * See migration 028 for what each column is and why the variance is derived
+ * from the four columns beside it rather than read off `stock_checks`.
+ */
+export async function getStockRegister(from, to) {
+  return withDb((client) =>
+    rows(
+      client,
+      'select * from get_stock_register($1, $2)',
+      [from, to],
+      'the stock register',
+    ),
+  );
+}
+
+/**
+ * Sales, stock bought, expenses and profit over an arbitrary run of days.
+ *
+ * getMonthlyReport answers the same question for a whole calendar month and
+ * cannot answer it for any other span - it takes a year and a month, not two
+ * dates. Same arithmetic in both; if one changes, both change.
+ */
+export async function getRangeSummary(from, to) {
+  return withDb(async (client) => {
+    const result = await one(
+      client,
+      'select get_range_summary($1, $2) as summary',
+      [from, to],
+      'the summary for those days',
+    );
+    return result?.summary ?? null;
+  });
+}
+
+/**
+ * Daily totals for the register's money tiles, one row per day that has any.
+ *
+ * TWO NARROW READS RATHER THAN A NEW RPC. Every other figure on the register
+ * comes from `get_range_summary`, which returns totals only - it has no
+ * per-day breakdown, and adding one would be a migration written to feed a
+ * decoration. These select two columns over a bounded date range and add them
+ * up in JavaScript, which for one month of deliveries and expenses is a few
+ * dozen rows.
+ *
+ * NO `limit`, DELIBERATELY. `getExpenses` takes one and defaults it to 100,
+ * which is right for a table that pages - and would be silently wrong here:
+ * a cap on a list you are going to total is a cap on the total, so the 101st
+ * expense of a month would just vanish from the line.
+ *
+ * The grouping is by the business date the row is FILED under - `purchase_date`
+ * and `expense_date` - not `created_at`. A delivery entered on the 5th against
+ * the 3rd belongs to the 3rd, which is the same rule every other figure in
+ * the app follows.
+ */
+export async function getPurchaseTotalsByDay(from, to) {
+  const result = await withDb((client) =>
+    rows(
+      client,
+      `select purchase_date, total_cost
+         from fuel_purchases
+        where purchase_date >= $1::date
+          and purchase_date <= $2::date`,
+      [from, to],
+      'the deliveries for those days',
+    ),
+  );
+
+  return sumByDay(result, 'purchase_date', 'total_cost');
+}
+
+export async function getExpenseTotalsByDay(from, to) {
+  const result = await withDb((client) =>
+    rows(
+      client,
+      `select expense_date, amount
+         from expenses
+        where expense_date >= $1::date
+          and expense_date <= $2::date`,
+      [from, to],
+      'the expenses for those days',
+    ),
+  );
+
+  return sumByDay(result, 'expense_date', 'amount');
+}
+
+/**
+ * `[{ purchase_date, total_cost }]` -> `{ '2026-08-03': 41200 }`.
+ *
+ * The keys are plain 'YYYY-MM-DD' strings, which is what the register looks
+ * its days up by: db.js parses Postgres `date` straight through as text
+ * rather than letting `pg` turn it into a Date in the server's own zone.
+ */
+function sumByDay(result, dateKey, valueKey) {
+  const byDay = {};
+  for (const row of result ?? []) {
+    const day = row[dateKey];
+    if (!day) continue;
+    byDay[day] = (byDay[day] ?? 0) + Number(row[valueKey] ?? 0);
+  }
+  return byDay;
+}
+
 export async function getMonthlyReport(year, month) {
   return withDb(async (client) => {
     const result = await one(
@@ -592,6 +723,39 @@ export async function getExpenses({ from, to, limit = 100 } = {}) {
       'the expenses',
     ),
   );
+}
+
+/**
+ * Every category the owner has actually used, most-used first.
+ *
+ * The Expenses form offers a fixed list of seven suggestions, and the pump's
+ * real data shows what that costs on its own: most rows had fallen into
+ * "Other", and one category had become the sentence "salary of haseeb and pump
+ * tea and lunch". A free-text box with no memory invites a new spelling every
+ * time, and the by-category breakdown is only as useful as the consistency of
+ * what was typed into it.
+ *
+ * Ordering by frequency rather than alphabetically puts the handful he uses
+ * every month at the top of the list, which is where the reuse actually comes
+ * from.
+ */
+export async function getExpenseCategories() {
+  const result = await withDb((client) =>
+    rows(
+      client,
+      'select category from expenses limit 2000',
+      [],
+      'the expense categories',
+    ),
+  );
+
+  const counts = new Map();
+  for (const row of result) {
+    const category = String(row.category ?? '').trim();
+    if (category) counts.set(category, (counts.get(category) ?? 0) + 1);
+  }
+
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([category]) => category);
 }
 
 export async function getProfiles() {
@@ -657,4 +821,72 @@ export async function getBankTransactions() {
       'the bank transactions',
     ),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Company assets
+//
+// What the pump has bought and kept: vehicles, machinery, equipment,
+// property. Owner-only, and no effect on sales, expenses or profit - see
+// migration 025.
+// ---------------------------------------------------------------------------
+
+/**
+ * One page of assets, newest purchase first, plus how many there are.
+ *
+ * The total rides along on the same query as a window function, the same way
+ * getFuelPricesPage does it - the pager needs the total, and asking separately
+ * would be a second round trip for a number this query has already had to
+ * establish.
+ */
+export async function getCompanyAssetsPage({ page = 1, perPage = 9 } = {}) {
+  const offset = (page - 1) * perPage;
+
+  return withDb(async (client) => {
+    const result = await rows(
+      client,
+      `select *, count(*) over () as total_count
+         from company_assets
+        order by purchase_date desc, created_at desc
+        limit $1 offset $2`,
+      [perPage, offset],
+      'the company assets',
+    );
+    return {
+      rows: result.map(({ total_count, ...row }) => row),
+      total: Number(result[0]?.total_count ?? 0),
+    };
+  });
+}
+
+/**
+ * Total value, count, the priciest category and the newest addition - the
+ * figures the page leads with.
+ *
+ * An RPC rather than a client-side sum over the page above, on purpose: the
+ * page is capped at `perPage` rows and a total worked out from only one page
+ * of them would be wrong the moment a second page exists. See
+ * `get_company_assets_summary()` for the full reasoning - it is the same
+ * lesson `getPurchases()` already carries a comment about.
+ */
+export async function getCompanyAssetsSummary() {
+  return withDb(async (client) => {
+    const result = await one(
+      client,
+      'select * from get_company_assets_summary()',
+      [],
+      'the assets summary',
+    );
+
+    return (
+      result ?? {
+        asset_count: 0,
+        total_value: 0,
+        top_category: null,
+        top_category_value: 0,
+        newest_name: null,
+        newest_date: null,
+      }
+    );
+  });
 }

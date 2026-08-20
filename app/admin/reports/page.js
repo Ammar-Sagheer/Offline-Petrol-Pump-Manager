@@ -18,6 +18,7 @@ import SalesTrendChart from '@/app/_components/admin/SalesTrendChart';
 import CashCreditChart from '@/app/_components/admin/CashCreditChart';
 import FuelBadge from '@/app/_components/ui/FuelBadge';
 import PendingLink from '@/app/_components/ui/PendingLink';
+import Button from '@/app/_components/ui/Button';
 
 export const metadata = { title: 'Reports' };
 
@@ -82,9 +83,9 @@ export default async function ReportsPage({ searchParams }) {
             defaultValue={monthParam}
             className="input py-2"
           />
-          <button type="submit" className="btn-secondary">
+          <Button variant="secondary" type="submit">
             Show
-          </button>
+          </Button>
         </form>
 
         {/* A plain link, not a fetch: the browser handles the download itself,
@@ -95,9 +96,16 @@ export default async function ReportsPage({ searchParams }) {
             export landed in Downloads as a junk file instead of showing why.
             The route's Content-Disposition header downloads the workbook on
             its own, and lets a failure navigate back here normally. */}
-        <a href={`/admin/reports/export?month=${monthParam}`} className="btn-primary">
+        {/* The month box beside it is this page's; the register takes a run of
+            days within a month, so it carries the month across and picks its
+            own days from there. */}
+        <Button variant="secondary" href={`/admin/reports/register?month=${monthParam}`} pending>
+          Sale &amp; stock register
+        </Button>
+
+        <Button component="a" variant="primary" href={`/admin/reports/export?month=${monthParam}`}>
           Download Excel
-        </a>
+        </Button>
       </PageHeader>
 
       {exportError ? (
@@ -113,6 +121,7 @@ export default async function ReportsPage({ searchParams }) {
 
       <StatGrid>
         <StatTile
+          icon="sales"
           label="Sales"
           value={formatPKR(totalSales)}
           sub={
@@ -122,6 +131,7 @@ export default async function ReportsPage({ searchParams }) {
           }
         />
         <StatTile
+          icon="purchases"
           label="Stock bought"
           value={formatPKR(totalStockCost)}
           sub={
@@ -134,6 +144,7 @@ export default async function ReportsPage({ searchParams }) {
             category, moved to /admin/expenses - so the tile carries the link
             rather than leaving the figure with no way through to its detail. */}
         <StatTile
+          icon="expenses"
           label="Expenses"
           value={formatPKR(report.expenses_total)}
           sub={
@@ -146,6 +157,7 @@ export default async function ReportsPage({ searchParams }) {
           }
         />
         <StatTile
+          icon="profit"
           label="Profit"
           value={formatPKR(profit)}
           tone={profit >= 0 ? 'positive' : 'negative'}
@@ -153,11 +165,17 @@ export default async function ReportsPage({ searchParams }) {
         />
       </StatGrid>
 
-      <p className="mt-3 rounded-lg border border-ink-200 bg-white px-4 py-3 text-xs text-ink-600">
-        Sales and profit here cover both trades — fuel through the nozzles and lubricants over the
-        counter. Profit counts stock <span className="font-semibold">bought</span> this month, not
-        stock sold from the tank or the shelf. A big delivery near month end therefore makes profit
-        look low — that money is sitting in stock, which is what the closing figures below show.
+      {/* One line, not four. This was a paragraph explaining that profit counts
+          stock bought rather than stock sold, why a late delivery flatters it
+          downwards, and that both trades are included - true, all of it, and
+          the owner's verdict was "too long". The first clause is the only part
+          that changes how a figure is read; "both trades" was already covered
+          by the Sales tile's own sub-line, which itemises fuel and lubricants.
+          The full reasoning lives in the Guide and on the Summary sheet of the
+          workbook, where there is room for it. */}
+      <p className="mt-3 text-sm text-ink-600">
+        Profit counts stock <span className="font-semibold">bought</span> this month, not stock
+        sold — so a big delivery near month end makes it look low.
       </p>
 
       {/* ---- cash / credit + pending ---- */}

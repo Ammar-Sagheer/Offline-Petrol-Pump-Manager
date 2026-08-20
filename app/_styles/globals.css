@@ -28,8 +28,11 @@
   --color-ink-800: #1e293b;
   --color-ink-900: #0f172a;
 
-  --color-petrol: #0284c7;
-  --color-diesel: #ca8a04;
+  /* Kept in step with app/_lib/fuel-colors.js, which is the source of
+     truth for anything that renders a fuel. Petrol is the dark blue, diesel
+     the light orange - see the header of that file for why. */
+  --color-petrol: #075985;
+  --color-diesel: #FDBA74;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
@@ -82,13 +85,139 @@ input[type='number']::-webkit-inner-spin-button {
    Component classes.
 
    Tailwind v4 only lets @apply reference real utilities, not other custom
-   classes - so `.btn-primary` cannot `@apply btn`. Each class below is
-   therefore written out in full rather than composed. Slightly repetitive,
-   but it means a class always works on its own in the markup.
+   classes - so one class here cannot `@apply` another. Each is therefore
+   written out in full rather than composed. Slightly repetitive, but it
+   means a class always works on its own in the markup.
 --------------------------------------------------------------------------- */
 @layer components {
+  /*
+   * No border, shadow does the work. A raised white card on the page's pale
+   * slate background (--color-ink-100, #f1f5f9) reads as a physical object -
+   * the "3D" look asked for - and a border round it fights that: an outline
+   * says "this is a bounded region", a shadow says "this is sitting above the
+   * page". `shadow-md` is doing real work here, not `shadow-sm`, which was
+   * nearly invisible against the pale page background - the border used to be
+   * carrying the edge definition the shadow should have been supplying.
+   */
+  /*
+   * A softer, lower, more diffuse shadow and a wider radius than the
+   * `shadow-md` this used to be - the Argon pass, and the part of it that
+   * touches the most screens, since almost every block in the app is a
+   * `.card`.
+   *
+   * `shadow-md` is a tight contact shadow: two stacked layers at 10% black
+   * within 6px of the edge, which reads as a card pressed close to the page
+   * and gives a grid of them a slightly gritty, ruled look. The borrowed one
+   * is a single 27px blur at 5% dropped 20px down - much wider, much fainter,
+   * and offset far enough to read as height rather than as an outline. Cards
+   * separate from the canvas by depth instead of by contrast, which is what
+   * makes the reference page look calm at a glance.
+   *
+   * It has to stay FAINT to be safe here. This app is read on a cheap tablet
+   * in poor light, where a heavy shadow turns into a visible grey band along
+   * every card edge and starts competing with the hairline dividers inside the
+   * card. 5% survives that; the 15%-20% a marketing page would use does not.
+   */
   .card {
-    @apply rounded-xl border border-ink-200 bg-white shadow-sm;
+    @apply rounded-2xl border-0 bg-white;
+    box-shadow: 0 20px 27px 0 rgb(0 0 0 / 0.05);
+  }
+
+  /*
+   * THE READINGS UNIT HEADER'S SURFACE - soft, low-frequency depth over
+   * whatever background-colour the element already has.
+   *
+   * THIS IS THE SECOND ATTEMPT AND THE FIRST ONE IS THE LESSON. It layered
+   * fractal-noise grain and 1px 45-degree hairlines over the band - genuinely
+   * "grainy" and "patterned", and the owner's verdict was that it hurt his
+   * eyes. It would. Both of those are HIGH-FREQUENCY texture: detail at the
+   * scale of one or two pixels, which on a cheap tablet shimmers as the panel
+   * scrolls, can moire against the screen's own pixel grid, and gives an eye
+   * that is 40-plus something to keep trying to focus on that is not there.
+   * The app's whole type and contrast floor exists for that reader; putting
+   * sandpaper behind his headings undoes it.
+   *
+   * SO: NOTHING HERE IS SMALLER THAN THE BAND ITSELF. Every layer is a wide,
+   * soft wash measured in hundreds of pixels, so there is no edge fine enough
+   * to shimmer and nothing to resolve. It still reads as a lit, slightly
+   * curved surface rather than a flat rectangle - which was the actual ask -
+   * but at a scale the eye takes in without working.
+   *
+   *   1. SHEEN - a broad highlight up in the top-left. One light source, so
+   *      the strip reads as curved rather than as a colour with a gradient.
+   *   2. FALLOFF - a matching shadow easing in at the bottom-right, which is
+   *      what makes the sheen read as light on a surface instead of a pale
+   *      patch.
+   *   3. SWEEP - one very wide diagonal band at 5% white, around 300px
+   *      across. This is the "pattern": at that scale it is a sheen across
+   *      the material, not a stripe, and it cannot shimmer because there is
+   *      no repeat small enough to.
+   *   4. BEVEL - inset hairlines, light along the top edge and dark along the
+   *      bottom. The only fine detail left, and it is static: a 1px line ON
+   *      the border is an edge the eye reads once, not a field it has to
+   *      scan.
+   *
+   * IT ADDS NO COLOUR. Every layer is white or black at a low alpha, so the
+   * band is "the fuel's colour, lit" and never a new hue - the only terms on
+   * which a decorative treatment may go near the fuels
+   * (docs/UI_CONVENTIONS.md -> "Two palettes, and they never overlap").
+   * `fuel-colors.js` still owns every hue in the app; this class does not know
+   * which fuel it is sitting on, which is exactly why it works unchanged on
+   * diesel's light orange and petrol's dark blue - the pair that breaks any
+   * treatment built from a fixed colour.
+   */
+  .fuel-band {
+    background-image:
+      radial-gradient(
+        140% 180% at 8% -40%,
+        rgb(255 255 255 / 0.26) 0%,
+        rgb(255 255 255 / 0.08) 38%,
+        rgb(255 255 255 / 0) 68%
+      ),
+      radial-gradient(120% 150% at 96% 140%, rgb(0 0 0 / 0.14) 0%, rgb(0 0 0 / 0) 62%),
+      linear-gradient(
+        104deg,
+        rgb(255 255 255 / 0) 0%,
+        rgb(255 255 255 / 0.05) 44%,
+        rgb(255 255 255 / 0.05) 56%,
+        rgb(255 255 255 / 0) 100%
+      );
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      inset 0 -1px 0 rgb(0 0 0 / 0.14);
+  }
+
+  /*
+   * THE WHOLE UNIT CARD AS A RAISED OBJECT - "where is the whole unit 3D look".
+   *
+   * The band had depth and the card under it did not, so a lit strip sat on a
+   * flat sheet and the two did not read as one thing.
+   *
+   * FOUR SHADOWS, NOT ONE, AND THAT IS THE ENTIRE TRICK. A single blur reads
+   * as a drop shadow no matter how big it gets; real depth comes from stacking
+   * a CONTACT shadow (1px, tight, where the object meets the page), a MID
+   * shadow (8-16px, the body of the lift) and an AMBIENT one (40px, very
+   * soft, the room's own light) - plus a white hairline inset along the top
+   * edge, which is the highlight on the object's own upper lip. The eye reads
+   * the combination as height; it reads any one of them as a blur.
+   *
+   * `.card` keeps its own quiet shadow for every other block in the app -
+   * stat tiles, tables, chart panels. This is deliberately only for the unit,
+   * which is a physical pump on the forecourt and the one thing on the page
+   * worth making a solid object. If everything were lifted this far, nothing
+   * would read as lifted at all.
+   *
+   * The alphas are slate rather than pure black. Black shadows over this
+   * page's ink-100 background go grey and dead; tinting them with the same
+   * ink the app is built from keeps the shadow the same family as the page.
+   */
+  .unit-card {
+    border: 1px solid rgb(15 23 42 / 0.06);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      0 1px 2px rgb(15 23 42 / 0.07),
+      0 8px 16px -6px rgb(15 23 42 / 0.12),
+      0 28px 44px -16px rgb(15 23 42 / 0.18);
   }
 
   .label {
@@ -113,52 +242,13 @@ input[type='number']::-webkit-inner-spin-button {
     font-variant-numeric: tabular-nums;
   }
 
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3
-           text-base font-semibold transition
-           focus-visible:outline-2 focus-visible:outline-offset-2
-           disabled:cursor-not-allowed disabled:opacity-50;
-  }
-
   /*
-   * The border here is INVISIBLE AND LOAD-BEARING. It is the same colour as
-   * the fill, and it exists only so a primary is the same height as the
-   * secondary and danger buttons beside it.
-   *
-   * Without it this was 48px against their 50px, because those two carry a 1px
-   * border and this did not. Every place in the app where a filled button sits
-   * next to an outlined one - "Manage lubricants" beside "Record a lubricant
-   * sale", every dialog's Save beside Cancel - the pair were two pixels apart
-   * and, being centred in a flex row, sitting a pixel off each other's
-   * baseline. Small enough to never look like a bug and large enough to make
-   * the row look wrong, which is how the owner reported it: the green ones are
-   * "a bit larger".
-   *
-   * Change the fill and this must change with it.
+   * THE .btn-* CLASSES ARE GONE. Buttons are Material UI now - see
+   * app/_components/ui/Button.js, which maps the app's three intents
+   * (primary / secondary / danger) onto MUI variants. Nothing here styles a
+   * button any more; adding a button style back here would put the app back
+   * to having two button systems, which is what this replaced.
    */
-  .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border
-           border-brand-600 bg-brand-600 px-4 py-3 text-base font-semibold text-white transition
-           hover:border-brand-700 hover:bg-brand-700
-           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600
-           disabled:cursor-not-allowed disabled:opacity-50;
-  }
-
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border
-           border-ink-300 bg-white px-4 py-3 text-base font-semibold text-ink-800
-           transition hover:bg-ink-50
-           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-500
-           disabled:cursor-not-allowed disabled:opacity-50;
-  }
-
-  .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border
-           border-red-300 bg-white px-4 py-3 text-base font-semibold text-red-700
-           transition hover:bg-red-50
-           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600
-           disabled:cursor-not-allowed disabled:opacity-50;
-  }
 
   /*
    * The nav column's scrollbar, for the windows where twelve sections do not
@@ -208,8 +298,21 @@ input[type='number']::-webkit-inner-spin-button {
    * the full gap. Adjacent margins collapse, so a preceding `mb-6` does not
    * add to this - the larger of the two wins.
    */
+  /*
+   * IT MUST NOT LOOK LIKE `.figure-label`. It did: both were small, uppercase,
+   * tracked and ink-600, so "Lubricants" over a row of tiles was set in very
+   * nearly the same style as the "SOLD" caption inside one of them. A heading
+   * that is typeset as a caption does not read as a heading, and the owner
+   * reported exactly that - the sections on Reports "are not so prominent".
+   *
+   * So it is now the one thing on the page that is neither a caption nor a
+   * figure: larger, near-black, and NOT uppercase. Dropping the uppercase is
+   * what does most of the work - it is the single feature the two classes
+   * shared most visibly, and lower case at 18px reads faster in poor light
+   * than capitals do at 14px.
+   */
   .section-heading {
-    @apply mb-3 mt-8 text-sm font-bold uppercase tracking-wide text-ink-600 first:mt-0;
+    @apply mb-3 mt-8 text-lg font-bold text-ink-900 first:mt-0;
   }
 
   /*
@@ -270,5 +373,112 @@ input[type='number']::-webkit-inner-spin-button {
     background-color: var(--color-ink-50);
     /* A real border does not travel with a sticky cell; an inset shadow does. */
     box-shadow: inset 0 -1px 0 var(--color-ink-200);
+  }
+
+  /*
+   * A COLUMN PINNED SIDEWAYS, in a table that already pins its heading.
+   *
+   * The Sale & Stock Register is the first table here too wide to read
+   * straight through - ten numeric columns against roughly 750px once the
+   * sidebar has taken its share - and the columns that matter most sit at
+   * either END of it: which day a row is, and where the running totals stand.
+   * Pinning those and letting the working in between slide is what makes it
+   * readable. The horizontal equivalent of the sticky heading above, and it
+   * relies on the same thing: `.table-scroll` is the scrolling element, so a
+   * sticky child has something to stick to.
+   *
+   * THE Z-INDEX IS THE WHOLE REASON THIS IS A CLASS rather than three lines of
+   * `sx` at the call site, and it cost a screenshot to find. The rule above
+   * gives EVERY header cell `z-index: 10`, and it outranks anything Material
+   * UI's `sx` emits - `.table-scroll thead th` is a class plus two elements,
+   * an `sx` class is one class. So a pinned header carrying `z-index: 2` from
+   * `sx` was painted OVER by the ordinary headers it was supposed to cover:
+   * the register's cumulative block slid underneath the daily columns and the
+   * heading read "Litres, %, %" above three figures that were nothing of the
+   * kind. The numbers were right and the header above them was wrong, which is
+   * the worst way for a table to fail.
+   *
+   * So: `.pinned` sets the stacking here, where it can outrank that rule, and
+   * the call site keeps only what genuinely varies - `left` or `right`, and
+   * the column's width. A pinned cell must also be OPAQUE, for the same reason
+   * the sticky heading is.
+   */
+  .table-scroll .pinned {
+    position: sticky;
+    z-index: 2;
+  }
+
+  .table-scroll thead th.pinned {
+    /* Above the ordinary headers (10) as well as the pinned body cells (2):
+       the top-left and top-right corners belong to the heading. */
+    z-index: 12;
+  }
+
+  /*
+   * DELIBERATELY NO background-color HERE, only the stacking. A pinned cell
+   * MUST be opaque - a transparent one lets the row sliding under it show
+   * through - but which opaque colour is the table's business, not the
+   * pattern's: the register's date column is white and its cumulative block is
+   * tinted. Declaring a background here would outrank the `sx` that sets it
+   * and flatten both to one colour, which is the same specificity trap the
+   * z-index note above describes, sprung from the other end. Header cells
+   * already get theirs from `.table-scroll thead th`.
+   */
+
+  /*
+   * The edge that says "the table continues underneath this", rather than
+   * "this number has been cut in half".
+   *
+   * Without it the first screenshot of the register showed a dip reading as
+   * "5,2" against the pinned block and it read as a rendering fault. A border
+   * alone does not do the job - the eye needs the depth cue to know which
+   * layer is on top. Direction matters: the shadow falls AWAY from the pinned
+   * column, over the content sliding past it.
+   */
+  .table-scroll .pinned-left {
+    box-shadow: 6px 0 6px -6px rgb(15 23 42 / 0.25);
+  }
+
+  .table-scroll .pinned-right {
+    box-shadow: -6px 0 6px -6px rgb(15 23 42 / 0.25);
+  }
+
+  /* A pinned HEADER needs both: its own edge shadow and the hairline under the
+     heading row, which the rule above supplies as an inset. One box-shadow
+     property, so they have to be written together or the second wins. */
+  .table-scroll thead th.pinned-left {
+    box-shadow:
+      inset 0 -1px 0 var(--color-ink-200),
+      6px 0 6px -6px rgb(15 23 42 / 0.25);
+  }
+
+  .table-scroll thead th.pinned-right {
+    box-shadow:
+      inset 0 -1px 0 var(--color-ink-200),
+      -6px 0 6px -6px rgb(15 23 42 / 0.25);
+  }
+
+  /*
+   * THE GUTTER PAST A PINNED COLUMN, and why the padding has to go rather than
+   * be painted over.
+   *
+   * `.table-scroll` is `-mx-4 px-4` below `sm`, so a table bleeds to the screen
+   * edges instead of sitting in a 16px margin. But a sticky offset is measured
+   * against the SCROLLPORT'S PADDING BOX, so `left: 0` stops 16px short of the
+   * card's edge and leaves a strip of ordinary, scrolling table showing past
+   * the pinned column. On the register's phone screenshot that was a sliver of
+   * the daily percentage column peeping out beyond the cumulative block, and a
+   * few characters of the variance column to the left of the date - both of
+   * which read as a rendering seam rather than as a column.
+   *
+   * Painting over it with an offset box-shadow was tried first and did not
+   * work; the padding simply should not be there on a table with pinned
+   * columns. The bleed still happens - the negative margin is what does that,
+   * and it stays - and the cells' own padding gives the first and last columns
+   * their breathing room. Add this alongside `.table-scroll` on any table that
+   * pins a column.
+   */
+  .table-scroll.has-pinned-columns {
+    @apply px-0;
   }
 }

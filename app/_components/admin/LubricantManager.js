@@ -15,6 +15,7 @@ import FormMessage from '@/app/_components/ui/FormMessage';
 import Dialog from '@/app/_components/ui/Dialog';
 import NumberInput from '@/app/_components/ui/NumberInput';
 import { todayISO } from '@/app/_lib/date-helpers';
+import Button from '@/app/_components/ui/Button';
 
 const litreFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
@@ -46,9 +47,9 @@ export default function LubricantManager({ lubricants }) {
 
   return (
     <>
-      <button type="button" onClick={() => setIsOpen(true)} className="btn-secondary">
+      <Button variant="secondary" type="button" onClick={() => setIsOpen(true)}>
         Manage lubricants
-      </button>
+      </Button>
 
       <Dialog
         open={isOpen}
@@ -69,12 +70,12 @@ export default function LubricantManager({ lubricants }) {
           />
         ) : (
           <div className="space-y-4 p-4">
-            <button type="button" onClick={() => setEditing('new')} className="btn-primary w-full">
+            <Button variant="primary" fullWidth type="button" onClick={() => setEditing('new')}>
               <span aria-hidden="true" className="text-base leading-none">
                 +
               </span>
               Add a lubricant
-            </button>
+            </Button>
 
             {active.length === 0 ? (
               <p className="rounded-lg border border-ink-200 bg-ink-50 px-4 py-6 text-center text-sm text-ink-600">
@@ -312,12 +313,12 @@ function ProductForm({ lubricant, onDone }) {
       <FormMessage state={state} />
 
       <div className="flex gap-2 border-t border-ink-200 pt-4">
-        <SubmitButton className="btn-primary flex-1">
+        <SubmitButton className="flex-1" >
           {isEdit ? 'Save changes' : 'Add lubricant'}
         </SubmitButton>
-        <button type="button" onClick={onDone} className="btn-secondary">
+        <Button variant="secondary" type="button" onClick={onDone}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );

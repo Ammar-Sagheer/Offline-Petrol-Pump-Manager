@@ -75,7 +75,7 @@ export default function ChangePasswordForm() {
 
       <FormMessage state={state} />
 
-      <SubmitButton className="btn-primary w-full">Change password</SubmitButton>
+      <SubmitButton fullWidth >Change password</SubmitButton>
     </form>
   );
 }

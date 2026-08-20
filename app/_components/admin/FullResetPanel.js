@@ -5,6 +5,7 @@ import { useActionState, useState } from 'react';
 import { resetEverything } from '@/app/_lib/actions';
 import SubmitButton from '@/app/_components/ui/SubmitButton';
 import Dialog from '@/app/_components/ui/Dialog';
+import Button from '@/app/_components/ui/Button';
 
 /**
  * Empties the books. Only rendered when ALLOW_FULL_RESET is set on the server.
@@ -32,9 +33,9 @@ export default function FullResetPanel() {
             expense and fuel rate. Logins, tanks and nozzle starting readings are kept.
           </p>
         </div>
-        <button type="button" onClick={() => setIsOpen(true)} className="btn-danger shrink-0">
+        <Button variant="danger" type="button" onClick={() => setIsOpen(true)} className="shrink-0">
           Empty everything
-        </button>
+        </Button>
       </div>
 
       <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -104,15 +105,15 @@ export default function FullResetPanel() {
 
           <div className="flex gap-2">
             <SubmitButton
-              className="btn-danger flex-1"
+              variant="danger" className="flex-1" 
               pendingLabel="Emptying…"
               disabled={confirmation !== 'RESET'}
             >
               Empty everything
             </SubmitButton>
-            <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={() => setIsOpen(false)}>
               {state?.ok ? 'Close' : 'Cancel'}
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

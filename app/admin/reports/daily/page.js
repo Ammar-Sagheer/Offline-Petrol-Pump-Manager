@@ -6,6 +6,7 @@ import EmptyState from '@/app/_components/ui/EmptyState';
 import PendingLink from '@/app/_components/ui/PendingLink';
 import Icon from '@/app/_components/ui/Icon';
 import DailySalesTable from '@/app/_components/admin/DailySalesTable';
+import Button from '@/app/_components/ui/Button';
 
 export const metadata = { title: 'Daily sales' };
 
@@ -129,15 +130,15 @@ export default async function DailySalesPage({ searchParams }) {
 function PagerLink({ href, disabled, label, children }) {
   if (disabled) {
     return (
-      <span className="btn-secondary cursor-not-allowed opacity-50" aria-disabled="true">
+      <Button variant="secondary" disabled aria-disabled="true">
         {children}
-      </span>
+      </Button>
     );
   }
 
   return (
-    <PendingLink href={href} className="btn-secondary" aria-label={label}>
+    <Button variant="secondary" href={href} pending aria-label={label}>
       {children}
-    </PendingLink>
+    </Button>
   );
 }

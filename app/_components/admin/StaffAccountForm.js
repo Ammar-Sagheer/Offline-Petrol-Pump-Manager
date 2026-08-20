@@ -7,6 +7,7 @@ import SubmitButton from '@/app/_components/ui/SubmitButton';
 import FormMessage from '@/app/_components/ui/FormMessage';
 import Toast from '@/app/_components/ui/Toast';
 import Dialog from '@/app/_components/ui/Dialog';
+import Button from '@/app/_components/ui/Button';
 
 /**
  * Creates a login, behind a dialog.
@@ -43,19 +44,18 @@ export default function StaffAccountForm() {
 
   return (
     <>
-      <button
+      <Button variant="secondary"
         type="button"
         onClick={() => {
           setShowResult(false);
           setIsOpen(true);
         }}
-        className="btn-secondary"
       >
         <span aria-hidden="true" className="text-base leading-none">
           +
         </span>
         Add login
-      </button>
+      </Button>
 
       <Dialog
         open={isOpen}
@@ -138,12 +138,12 @@ export default function StaffAccountForm() {
           <FormMessage state={showResult ? state : null} />
 
           <div className="flex gap-2 border-t border-ink-200 pt-4">
-            <SubmitButton className="btn-primary flex-1" pendingLabel="Creating…">
+            <SubmitButton className="flex-1"  pendingLabel="Creating…">
               Create login
             </SubmitButton>
-            <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={() => setIsOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

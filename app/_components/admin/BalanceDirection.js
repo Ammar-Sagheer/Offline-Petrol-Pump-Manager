@@ -34,22 +34,25 @@
  * of the line. <bdi> isolates the run so the brackets stay put whatever is
  * inside them.
  */
-export default function BalanceDirection({ name, value, onChange, options }) {
+export default function BalanceDirection({ name, value, onChange, options, activeClass }) {
+  // Green by default, because on the ledger a chosen direction is just "the
+  // selected one". On a card that already wears a colour - the Stock page's
+  // tank cards - the caller passes that colour instead, so the control belongs
+  // to the card rather than looking like a stray third hue dropped into it.
+  const active = activeClass ?? 'border-brand-600 bg-brand-50 text-brand-900';
   return (
     <div className="grid gap-2">
       {options.map((option) => {
-        const active = value === option.value;
+        const isActive = value === option.value;
         return (
           <button
             key={option.value}
             type="button"
             onClick={() => onChange(option.value)}
-            aria-pressed={active}
+            aria-pressed={isActive}
             className={[
               'rounded-lg border px-3 py-2.5 text-left transition',
-              active
-                ? 'border-brand-600 bg-brand-50 text-brand-900'
-                : 'border-ink-300 bg-white text-ink-700 hover:bg-ink-50',
+              isActive ? active : 'border-ink-300 bg-white text-ink-700 hover:bg-ink-50',
             ].join(' ')}
           >
             <span className="block text-sm font-semibold">
@@ -67,7 +70,7 @@ export default function BalanceDirection({ name, value, onChange, options }) {
                 </>
               ) : null}
             </span>
-            <span className={`block text-xs ${active ? 'text-brand-800' : 'text-ink-600'}`}>
+            <span className={`block text-xs ${isActive ? '' : 'text-ink-600'}`}>
               {option.detail}
             </span>
           </button>

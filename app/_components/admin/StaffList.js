@@ -5,6 +5,7 @@ import { useActionState, useState } from 'react';
 import { setStaffRole, setStaffActive, deleteStaffAccount } from '@/app/_lib/actions';
 import SubmitButton from '@/app/_components/ui/SubmitButton';
 import Dialog from '@/app/_components/ui/Dialog';
+import Button from '@/app/_components/ui/Button';
 
 /**
  * The people who can sign in, split into owners and data entry.
@@ -153,7 +154,7 @@ function RoleButton({ person }) {
       <input type="hidden" name="profile_id" value={person.id} />
       <input type="hidden" name="role" value={nextRole} />
       <SubmitButton
-        className="btn-secondary whitespace-nowrap px-2.5 py-1.5 text-xs"
+        variant="secondary" className="whitespace-nowrap px-2.5 py-1.5 text-xs" 
         pendingLabel="Moving…"
         title={
           isOwner
@@ -263,12 +264,12 @@ function DeleteAccount({ person }) {
           ) : null}
 
           <div className="flex gap-2">
-            <SubmitButton className="btn-danger flex-1" pendingLabel="Deleting…">
+            <SubmitButton variant="danger" className="flex-1"  pendingLabel="Deleting…">
               Delete this login
             </SubmitButton>
-            <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={() => setIsOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

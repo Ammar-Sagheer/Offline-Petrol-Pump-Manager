@@ -46,7 +46,7 @@ export default function LoginForm({ next = '' }) {
 
       <FormMessage state={state} />
 
-      <SubmitButton className="btn-primary w-full" pendingLabel="Signing in…">
+      <SubmitButton fullWidth  pendingLabel="Signing in…">
         Sign in
       </SubmitButton>
 

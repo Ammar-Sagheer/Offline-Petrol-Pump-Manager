@@ -8,6 +8,11 @@ import FormMessage from '@/app/_components/ui/FormMessage';
 import { todayISO } from '@/app/_lib/date-helpers';
 import NumberInput from '@/app/_components/ui/NumberInput';
 
+/*
+ * The starting suggestions, for a pump that has not recorded anything yet.
+ * Once it has, `used` (the categories actually typed, most-used first) goes in
+ * front of these - see getExpenseCategories.
+ */
 const COMMON_CATEGORIES = [
   'Salaries',
   'Electricity',
@@ -18,7 +23,21 @@ const COMMON_CATEGORIES = [
   'Other',
 ];
 
-export default function ExpenseForm() {
+export default function ExpenseForm({ used = [] }) {
+  /*
+   * Own categories first, then the stock ones that have not been used yet.
+   * A free-text box with no memory is how this pump ended up with most of its
+   * spending under "Other" and one category reading "salary of haseeb and pump
+   * tea and lunch" - every entry invented its own wording, and the breakdown
+   * that reads them was worth correspondingly little.
+   */
+  const suggestions = [
+    ...used,
+    ...COMMON_CATEGORIES.filter(
+      (category) => !used.some((u) => u.toLowerCase() === category.toLowerCase()),
+    ),
+  ];
+
   const formRef = useRef(null);
   const [state, formAction] = useActionState(async (prevState, formData) => {
     const result = await createExpense(prevState, formData);
@@ -44,9 +63,10 @@ export default function ExpenseForm() {
           list="expense-categories"
           className="input"
           placeholder="e.g. Salaries"
+          autoComplete="off"
         />
         <datalist id="expense-categories">
-          {COMMON_CATEGORIES.map((category) => (
+          {suggestions.map((category) => (
             <option key={category} value={category} />
           ))}
         </datalist>
@@ -90,7 +110,7 @@ export default function ExpenseForm() {
 
       <FormMessage state={state} />
 
-      <SubmitButton className="btn-primary w-full">Save expense</SubmitButton>
+      <SubmitButton fullWidth >Save expense</SubmitButton>
     </form>
   );
 }

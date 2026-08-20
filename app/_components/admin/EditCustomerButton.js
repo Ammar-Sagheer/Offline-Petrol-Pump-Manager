@@ -8,6 +8,7 @@ import FormMessage from '@/app/_components/ui/FormMessage';
 import Toast from '@/app/_components/ui/Toast';
 import Dialog from '@/app/_components/ui/Dialog';
 import NumberInput from '@/app/_components/ui/NumberInput';
+import Button from '@/app/_components/ui/Button';
 
 /**
  * Correcting a customer's details from their own page.
@@ -47,16 +48,15 @@ export default function EditCustomerButton({ customer }) {
 
   return (
     <>
-      <button
+      <Button variant="secondary"
         type="button"
         onClick={() => {
           setShowResult(false);
           setIsOpen(true);
         }}
-        className="btn-secondary"
       >
         Edit details
-      </button>
+      </Button>
 
       <Dialog
         open={isOpen}
@@ -143,12 +143,12 @@ export default function EditCustomerButton({ customer }) {
           <FormMessage state={showResult ? state : null} />
 
           <div className="flex gap-2 border-t border-ink-200 pt-3">
-            <SubmitButton className="btn-primary flex-1" pendingLabel="Saving…">
+            <SubmitButton className="flex-1"  pendingLabel="Saving…">
               Save changes
             </SubmitButton>
-            <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={() => setIsOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

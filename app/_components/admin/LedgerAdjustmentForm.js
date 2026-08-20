@@ -8,6 +8,7 @@ import FormMessage from '@/app/_components/ui/FormMessage';
 import BalanceDirection from '@/app/_components/admin/BalanceDirection';
 import { todayISO } from '@/app/_lib/date-helpers';
 import NumberInput from '@/app/_components/ui/NumberInput';
+import Button from '@/app/_components/ui/Button';
 
 const moneyFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const showMoney = (n) => `Rs ${moneyFormat.format(Math.round(n) === 0 ? 0 : n)}`;
@@ -62,9 +63,9 @@ export default function LedgerAdjustmentForm({ customerId, balance = 0 }) {
 
   if (!isOpen) {
     return (
-      <button type="button" onClick={() => setIsOpen(true)} className="btn-secondary w-full">
+      <Button variant="secondary" fullWidth type="button" onClick={() => setIsOpen(true)}>
         Make a manual adjustment
-      </button>
+      </Button>
     );
   }
 
@@ -180,7 +181,7 @@ export default function LedgerAdjustmentForm({ customerId, balance = 0 }) {
 
       <FormMessage state={state} />
 
-      <SubmitButton className="btn-primary w-full" disabled={!direction}>
+      <SubmitButton fullWidth  disabled={!direction}>
         Post adjustment
       </SubmitButton>
     </form>

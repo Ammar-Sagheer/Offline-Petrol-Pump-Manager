@@ -40,13 +40,47 @@ import { useBrand } from '@/app/_components/ui/BrandProvider';
  */
 const LINKS = [
   { href: '/admin', label: 'Dashboard', icon: 'dashboard', roles: ['super_admin'] },
-  { href: '/admin/readings', label: 'Readings', icon: 'readings', roles: ['super_admin', 'data_entry'] },
-  { href: '/admin/lubricants', label: 'Lubricants', icon: 'lubricants', roles: ['super_admin', 'data_entry'] },
-  { href: '/admin/purchases', label: 'Purchases', icon: 'purchases', roles: ['super_admin', 'data_entry'] },
-  { href: '/admin/stock-checks', label: 'Stock', icon: 'stock', roles: ['super_admin', 'data_entry'] },
-  { href: '/admin/customers', label: 'Customers', icon: 'customers', roles: ['super_admin', 'data_entry'] },
+  {
+    href: '/admin/readings',
+    label: 'Readings',
+    icon: 'readings',
+    roles: ['super_admin', 'data_entry'],
+  },
+  {
+    href: '/admin/lubricants',
+    label: 'Lubricants',
+    icon: 'lubricants',
+    roles: ['super_admin', 'data_entry'],
+  },
+  {
+    href: '/admin/purchases',
+    label: 'Purchases',
+    icon: 'purchases',
+    roles: ['super_admin', 'data_entry'],
+  },
+  {
+    href: '/admin/stock-checks',
+    label: 'Stock',
+    icon: 'stock',
+    roles: ['super_admin', 'data_entry'],
+  },
+  {
+    href: '/admin/customers',
+    label: 'Customers',
+    icon: 'customers',
+    roles: ['super_admin', 'data_entry'],
+  },
   { href: '/admin/banking', label: 'Banking', icon: 'banking', roles: ['super_admin'] },
   { href: '/admin/expenses', label: 'Expenses', icon: 'expenses', roles: ['super_admin'] },
+  // Property the pump has bought and kept, not spending or takings - its own
+  // entry beside Expenses and Banking rather than a tab on either, because it
+  // answers a different question ("what do we own") from both.
+  {
+    href: '/admin/company-assets',
+    label: 'Company Assets',
+    icon: 'assets',
+    roles: ['super_admin'],
+  },
   { href: '/admin/reports', label: 'Reports', icon: 'reports', roles: ['super_admin'] },
   { href: '/admin/settings', label: 'Settings', icon: 'settings', roles: ['super_admin'] },
   // Offline-only. Copying the data folder is this build's substitute for the
@@ -87,12 +121,12 @@ const LINKS = [
 ];
 
 export default function AdminSidebar({ profile }) {
-  const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
-  const drawerRef = useRef(null);
   // Licence-derived here rather than a constant in brand.js - see
   // docs/LICENSING_PLAN.md and the <BrandProvider> in admin/layout.js.
   const { businessName } = useBrand();
+  const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
+  const drawerRef = useRef(null);
 
   const visibleLinks = LINKS.filter((link) => link.roles.includes(profile.role));
 
@@ -279,7 +313,7 @@ export default function AdminSidebar({ profile }) {
           if (event.target === drawerRef.current) drawerRef.current.close();
         }}
         className="m-0 mr-auto h-dvh max-h-none w-[19rem] max-w-none bg-transparent p-0
-                   backdrop:bg-ink-900/50 lg:hidden"
+                   backdrop:bg-ink-900/60 backdrop:backdrop-blur-sm lg:hidden"
       >
         <div className="flex h-full flex-col bg-white">
           {/* The close button is taken out of the flow rather than sitting

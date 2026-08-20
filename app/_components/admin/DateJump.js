@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 
 import Spinner from '@/app/_components/ui/Spinner';
+import Button from '@/app/_components/ui/Button';
 
 /**
  * The date box out of DateNav, which goes to the day as soon as one is picked.
@@ -89,9 +90,9 @@ export default function DateJump({ date, basePath, paramName = 'date', extraPara
       ))}
 
       <noscript>
-        <button type="submit" className="btn-secondary">
+        <Button variant="secondary" type="submit">
           Go
-        </button>
+        </Button>
       </noscript>
     </form>
   );

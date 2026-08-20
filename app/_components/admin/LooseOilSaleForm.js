@@ -9,6 +9,7 @@ import Toast from '@/app/_components/ui/Toast';
 import Dialog from '@/app/_components/ui/Dialog';
 import NumberInput from '@/app/_components/ui/NumberInput';
 import { formatRate, formatLitresFine } from '@/app/_lib/format-helpers';
+import Button from '@/app/_components/ui/Button';
 
 /*
  * Formatted inline rather than through helpers.js, which reaches into request
@@ -107,20 +108,19 @@ export default function LooseOilSaleForm({ drums, customers, date, dateLabel }) 
 
   return (
     <>
-      <button
+      <Button variant="primary"
         type="button"
         onClick={() => {
           setShowResult(false);
           setIsOpen(true);
         }}
-        className="btn-primary"
         disabled={drums.length === 0}
       >
         <span aria-hidden="true" className="text-base leading-none">
           +
         </span>
         Record a loose oil sale
-      </button>
+      </Button>
 
       <Dialog
         open={isOpen}
@@ -359,15 +359,15 @@ export default function LooseOilSaleForm({ drums, customers, date, dateLabel }) 
 
           <div className="flex gap-2 border-t border-ink-200 pt-4">
             <SubmitButton
-              className="btn-primary flex-1"
+              className="flex-1" 
               pendingLabel="Saving…"
               disabled={creditTooBig || (Boolean(selected) && !hasRate)}
             >
               Save sale
             </SubmitButton>
-            <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={() => setIsOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

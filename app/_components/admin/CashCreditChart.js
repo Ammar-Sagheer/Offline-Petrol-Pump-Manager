@@ -25,7 +25,17 @@ import ChartTooltip from '@/app/_components/admin/ChartTooltip';
  * Stacked segments carry a 2px stroke in the surface colour, which reads as a
  * hairline gap between them rather than one solid block.
  */
-const CASH_COLOR = '#059669';
+/*
+ * VIOLET IS A DELIBERATE EXCEPTION to the app's palette, and it must stay.
+ * The 2026 audit collapsed every decorative hue in the app onto green / amber
+ * / red / slate, and the obvious move here was to make credit amber to match
+ * the "money owed" colour the stat tiles use. That would be wrong: this pair
+ * was chosen with a palette validator, not by eye, because green/violet
+ * separates cleanly for red-green colour blindness (deutan dE 25.2) where
+ * green/amber does not. Consistency does not outrank being readable by the
+ * person using it.
+ */
+const CASH_COLOR = '#047857';
 const CREDIT_COLOR = '#7c3aed';
 const SURFACE = '#ffffff';
 

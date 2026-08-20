@@ -74,7 +74,7 @@ export default function FuelPriceForm({ currentRates }) {
 
       <FormMessage state={state} />
 
-      <SubmitButton className="btn-primary w-full">Save rate</SubmitButton>
+      <SubmitButton fullWidth >Save rate</SubmitButton>
     </form>
   );
 }

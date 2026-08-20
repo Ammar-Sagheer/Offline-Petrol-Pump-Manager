@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Dialog from '@/app/_components/ui/Dialog';
 import IconButton from '@/app/_components/ui/IconButton';
 import SubmitButton from '@/app/_components/ui/SubmitButton';
+import Button from '@/app/_components/ui/Button';
 
 /**
  * "Are you sure?" as a dialog, for every destructive action in the app.
@@ -92,14 +93,14 @@ export default function ConfirmAction({
           <div className="flex flex-wrap gap-2">
             <SubmitButton
               disabled={confirmDisabled}
-              className="btn-danger flex-1 disabled:cursor-not-allowed disabled:opacity-50"
+              variant="danger" className="flex-1 disabled:cursor-not-allowed disabled:opacity-50" 
               pendingLabel={pendingLabel}
             >
               {confirmLabel}
             </SubmitButton>
-            <button type="button" onClick={close} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={close}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

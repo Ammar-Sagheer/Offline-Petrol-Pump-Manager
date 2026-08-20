@@ -12,8 +12,9 @@ Reference repo (read-only, do not push to it):
 its own `CLAUDE.md`, `docs/UI_CONVENTIONS.md` and `docs/CHANGELOG.md` - read
 those before any UI work here.** The offline app is meant to be visually and
 behaviourally identical to it, so its design decisions are this repo's design
-decisions; the UI is synced to its commit `ba9ca7c` (was `1de9266` - see "The
-catch-up to reference main" below).
+decisions; the UI is synced to its commit `98712fd` (was `ba9ca7c`, and
+`1de9266` before that - see "The catch-up to reference main" and "The second
+catch-up" below).
 
 **The one deliberate UI difference:** the login page redirects to
 `/admin/setup` when no profile exists. A reset database has no owner account
@@ -102,6 +103,141 @@ re-inventing - see the scratchpad technique below):
   half-way ones. They agree; `Math.round(-0.5)` would not have.
 - **The app was then actually RUN** (see below), which is the only step that
   proves anything about what renders.
+
+## The second catch-up: reference `ba9ca7c` -> `98712fd`
+
+The reference moved again - this time the change was mostly *design*, plus
+three features and one real money bug. This round brings the offline build to
+reference `98712fd`.
+
+**Finding the sync point mattered more than reading the diff.** The offline
+migration numbers still cannot be compared to the reference's, but the
+*function list* can: at reference commit `69e02c7` the exported names in
+`app/_lib/data-service.js` matched this repo's exactly (minus the two
+offline-only ones, `getMonthExport` and `anyProfilesExist`). That pins the
+sync point, and from there `git diff 69e02c7..HEAD` in the reference is the
+exact scope of work - 81 files, no guessing. Then, per file:
+`git show 69e02c7:<path> | diff - <offline path>`. Anything byte-identical is
+a **verbatim copy**; anything else has an offline-specific reason and needs
+merging by hand. That test came back clean for 62 of the 65 app files, which
+is why this round was mechanical rather than archaeological. Worth repeating
+next time.
+
+The three that had diverged, and why:
+- `AdminSidebar.js` - the Backup nav entry, and `useBrand()` instead of the
+  `BUSINESS_NAME` constant.
+- `app/layout.js` - `generateMetadata()` reads the licence at run time; a
+  plain `metadata` export cannot.
+- `SalesTrendChart.js` - simply older than the sync point; it had never got
+  the rupees/litres toggle. Taken wholesale.
+
+### Database: reference 036-043 -> `db/migrations/025-030`
+
+| offline | reference | what |
+| --- | --- | --- |
+| 025 | 036 | company assets: table, enum, summary RPC, activity-log branch |
+| 026 | 039 | **a dip belongs to the day it closes** |
+| 027 | 040 | company assets in the monthly export |
+| 028 | 041 | the Sale & Stock Register, and profit over any run of days |
+| 029 | 042 | the phone number reaches the Customers list |
+| 030 | 043 | the lubricant trend carries its cash/credit split |
+
+The translation was again the same two edits and nothing else:
+`authenticated` -> `app_user`, and no `anon` role to revoke from. Not one of
+these needed `auth.uid()` touching - `trg_write_activity` came across
+byte-identical, checked by extracting both copies and diffing them rather
+than by eye.
+
+**Reference 037 and 038 are deliberately not ported.** 037 added
+`get_reading_completion()` for a strip of day tiles above the nozzle list;
+038 dropped both the strip and the function. Replaying a function only to
+delete it leaves the schema no different and the history harder to read, so
+the pair collapses to nothing - which is why the numbering steps from the
+reference's 036 straight to its 039. The migration header says so, so nobody
+has to re-derive it.
+
+**026 is the one to actually read.** The pump dips its tanks first thing in
+the morning, before the pumps are switched on, so a dip dated the 11th
+measures the tank at the *close of the 10th*. The maths assumed the opposite
+and reported a whole day's fuel as a loss, every day. `check_date` keeps its
+meaning; a new `taken` column ('morning'/'evening') says when, and
+`books_date` is generated from the two. It also fixes a second bug found
+while proving the first: `expected_stock` was written once at save time and
+never recomputed, so anything back-filled for an earlier date left the figure
+permanently wrong - now a trigger recalculates it from history.
+
+### Material UI
+
+The reference migrated its whole icon set and its buttons to Material UI, so
+this build now carries `@mui/material`, `@mui/icons-material`,
+`@mui/material-nextjs` and the three `@emotion/*` packages, plus
+`app/_components/ui/AppTheme.js` and the `AppRouterCacheProvider` wrapper in
+`app/layout.js`. That wrapper is not optional: without it Emotion injects its
+`<style>` tags after hydration rather than during the server render, which is
+a hydration mismatch on *every* MUI icon. Nothing had to change in
+`package.json`'s `build.files` - Next traces these into `.next/standalone`,
+which is already included wholesale.
+
+### New screens
+
+- **Company Assets** (`/admin/company-assets`) - what the pump has bought and
+  kept. Owner-only end to end, RLS included. No effect on sales, expenses or
+  profit, and the Summary sheet of the workbook says so in words.
+- **Sale & Stock Register** (`/admin/reports/register`) - the owner's own
+  spreadsheet, brought into the app: one row per tank per day, with the
+  cumulative sales and cumulative variance columns that are the point of it.
+  Reached from Reports rather than the sidebar.
+
+Both are in `PAGE_ROLES` in `helpers.js`, which is what actually enforces the
+role - the nav entry is cosmetic.
+
+### How this round was verified
+
+Everything below ran in this sandbox against a real `embedded-postgres`
+cluster, seeded through the actual RPCs and triggers.
+
+- **All 30 migrations apply cleanly** from an empty cluster, in order, each in
+  its own transaction. Then asserted on the objects they were written to
+  create: both new enums, `company_assets`, `stock_checks.taken` and
+  `.books_date`, the four new functions, `get_reading_completion` *absent*,
+  and the three widened `returns table (...)` signatures actually carrying
+  their new columns.
+- **Every screen rendered at 1440px and 400px** - fourteen of them, including
+  both new ones - and asserted against the failures this repo has actually
+  shipped: a raw `Date.toString()` or a `GMT+0000` leaking through (bug #8's
+  family), `[object Object]`, `NaN`, `undefined`, `Rs -0`, a Next error
+  boundary, console errors, and page-level horizontal overflow. All clean, and
+  **looked at as well as asserted on**, which is the repo's own rule.
+- **The arithmetic was checked against the seed**, not eyeballed. The register
+  shows the 02 Aug morning dip against **01 Aug** - 12,000 opening less 190 L
+  sold is 11,810 book stock against an 11,822 L dip, so +12 L - and the
+  running variance walks +12, +12, -6, -6, +6, +6 to match the +6 L on the
+  period tile. That is migration 026 working end to end. Company Assets totals
+  Rs 2,213,000 across 5 assets with Property at 56%, which is the summary RPC
+  rather than a page-level sum.
+- **Role enforcement re-checked** after the nav change: a `data_entry` login
+  lands on `/admin/readings`, is offered exactly its six sections, and is
+  redirected away from all eight owner-only ones - including the new
+  `/admin/company-assets` and `/admin/reports/register`.
+- **The monthly workbook downloads and is a valid xlsx** with ten sheets, the
+  tenth being the new Assets register: every asset with its category label
+  mapped through `asset-categories.js` ("Vehicle", not "vehicle"), the
+  "Bought this month" flag as a word rather than a tick, and the
+  "Total owned - 5 assets" footer.
+
+What this round does **not** cover, same as every round before it: writing
+through the UI (mutations were exercised via SQL/RPC, not by filling in
+forms), and anything Electron-, installer- or Windows-specific.
+
+**A sandbox note worth keeping:** `embedded-postgres`'s `initialise()` will
+not run here, because Postgres refuses to run as root and this session is
+root. The way through is to `initdb` the cluster once as the `postgres` user
+(the binary in `node_modules/@embedded-postgres/linux-x64/native/bin/` works
+fine directly), chown that package so its `chmod` on start succeeds, and then
+let `start()` do the rest. `next start` is then pointed at the cluster with
+plain `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`SESSION_SECRET` env vars -
+connect as `app_user`, not `postgres`, or RLS is bypassed and the screens
+lie to you.
 
 ## What's built
 

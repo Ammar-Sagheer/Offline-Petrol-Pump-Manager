@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 
 import ChartTooltip from '@/app/_components/admin/ChartTooltip';
+import { fuelColor } from '@/app/_lib/fuel-colors';
 
 /**
  * Day by day, what the shelf took and what the drum took.
@@ -37,8 +38,32 @@ import ChartTooltip from '@/app/_components/admin/ChartTooltip';
  * money the two are comparable, which is the whole reason to chart them
  * together.
  */
-const PACK_COLOR = '#059669';
-const LOOSE_COLOR = '#7c3aed';
+/*
+ * BOTH SERIES ARE LUBRICANT'S OWN COLOUR, one light and one dark.
+ *
+ * This was brand green for packed and violet for loose - two hues borrowed
+ * from the chrome to separate two halves of ONE product. On a chart headed
+ * "Oil sales" that is backwards: the reader's first question is which bar is
+ * oil, and neither colour answered it. Gold does, and it is the colour
+ * lubricant already wears on its badge and its stat-tile glyph.
+ *
+ * THE PAIR IS SEPARATED BY LIGHTNESS, NOT HUE, and it is separated as far as
+ * the family allows: `#655216` is lubricant's DARKEST gold (the one its text
+ * on white uses) against `#D4AF37`, its vivid one. The first pass used the
+ * middle `#977B20` and the two blocks sat too close to tell apart in a
+ * stacked bar; this is the widest lightness gap available without leaving the
+ * hue. Both are in fuel-colors.js. That
+ * is deliberate: two hues would have been a second colour decision inside a
+ * product that owns one, and a lightness step survives red-green colour
+ * blindness where two hues of similar value do not. Stacked one on top of the
+ * other in the same bar, a light block over a dark one reads as two parts of
+ * a whole, which is what packed and loose are.
+ *
+ * The legend still names both, so the colour is never carrying it alone.
+ */
+const LUBRICANT = fuelColor('lubricant');
+const PACK_COLOR = LUBRICANT.deepHex;
+const LOOSE_COLOR = LUBRICANT.raw;
 const SURFACE = '#ffffff';
 
 const compact = new Intl.NumberFormat('en-US', {

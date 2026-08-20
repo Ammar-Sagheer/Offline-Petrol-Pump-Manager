@@ -6,6 +6,7 @@ import { deleteCustomer, purgeCustomer, setCustomerActive } from '@/app/_lib/act
 import ConfirmAction from '@/app/_components/ui/ConfirmAction';
 import Dialog from '@/app/_components/ui/Dialog';
 import SubmitButton from '@/app/_components/ui/SubmitButton';
+import Button from '@/app/_components/ui/Button';
 
 /**
  * Taking a customer off the list, and putting one back.
@@ -173,14 +174,14 @@ export function PurgeCustomerButton({ customerId, name }) {
           <div className="flex flex-wrap gap-2">
             <SubmitButton
               disabled={!matches}
-              className="btn-danger flex-1 disabled:cursor-not-allowed disabled:opacity-50"
+              variant="danger" className="flex-1 disabled:cursor-not-allowed disabled:opacity-50" 
               pendingLabel="Deleting…"
             >
               Delete for good
             </SubmitButton>
-            <button type="button" onClick={close} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={close}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

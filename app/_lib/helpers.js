@@ -34,7 +34,12 @@ export const ROUTE_ACCESS = {
   // The owner's own bank money, not pump operations.
   '/admin/banking': [ROLES.SUPER_ADMIN],
   '/admin/expenses': [ROLES.SUPER_ADMIN],
+  // The owner's own property, not pump operations - same reasoning as banking.
+  '/admin/company-assets': [ROLES.SUPER_ADMIN],
   '/admin/reports': [ROLES.SUPER_ADMIN],
+  // The day-by-day sale and stock register. Under Reports rather than in the
+  // sidebar while it is still a preview - reached from the Reports page.
+  '/admin/reports/register': [ROLES.SUPER_ADMIN],
   '/admin/settings': [ROLES.SUPER_ADMIN],
   // Your own login only. Managing other people's stays under /admin/settings.
   '/admin/account': [ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY],

@@ -6,6 +6,7 @@ import { deleteBankAccount } from '@/app/_lib/actions';
 import SubmitButton from '@/app/_components/ui/SubmitButton';
 import FormMessage from '@/app/_components/ui/FormMessage';
 import Dialog from '@/app/_components/ui/Dialog';
+import Button from '@/app/_components/ui/Button';
 
 /**
  * Removes an account and its transactions.
@@ -74,12 +75,12 @@ export default function DeleteBankAccountButton({ accountId, label, transactionC
           <FormMessage state={showResult ? state : null} />
 
           <div className="flex gap-2">
-            <SubmitButton className="btn-danger flex-1" pendingLabel="Deleting…">
+            <SubmitButton variant="danger" className="flex-1"  pendingLabel="Deleting…">
               Delete account
             </SubmitButton>
-            <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={() => setIsOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

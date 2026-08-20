@@ -42,7 +42,8 @@ export const metadata = { title: 'Stock' };
 const PER_PAGE = 25;
 
 export default async function StockChecksPage({ searchParams }) {
-  await requirePageRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
+  const profile = await requirePageRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
+  const canManage = profile?.role === ROLES.SUPER_ADMIN;
 
   const params = await searchParams;
   const page = pageFrom(params);
@@ -60,6 +61,23 @@ export default async function StockChecksPage({ searchParams }) {
   const checksOnDate = new Map(
     checks.filter((check) => check.check_date === date).map((check) => [check.tank_id, check]),
   );
+
+  /*
+   * The earliest day each tank has a dip closing.
+   *
+   * A dip with nothing before it is measured against the tank's OPENING STOCK
+   * from Settings, not against a previous measurement - so a difference there
+   * is the two figures disagreeing, not fuel that moved. Calling that "a gain
+   * of 4,702 L" in green, as this page did, reads as a surplus in the ground.
+   * Derived here rather than asked of the database: getStockChecks() is already
+   * uncapped, so the first dip is the one with the smallest books_date.
+   */
+  const earliestByTank = new Map();
+  for (const check of checks) {
+    const closes = check.books_date ?? check.check_date;
+    const seen = earliestByTank.get(check.tank_id);
+    if (!seen || closes < seen) earliestByTank.set(check.tank_id, closes);
+  }
 
   /*
    * Sliced rather than paged in Postgres: the lookup above needs whichever
@@ -98,6 +116,9 @@ export default async function StockChecksPage({ searchParams }) {
             tank={tank}
             date={date}
             existingCheck={checksOnDate.get(tank.id) ?? null}
+            earliestBooksDate={earliestByTank.get(tank.id) ?? null}
+            openingStock={tank.opening_stock_litres}
+            canManage={canManage}
           />
         ))}
       </div>
@@ -192,7 +213,11 @@ export default async function StockChecksPage({ searchParams }) {
           <table className="w-full min-w-[38rem]">
             <thead className="border-b border-ink-200 bg-ink-50">
               <tr>
-                <th className="th">Date</th>
+                {/* The day the dip CLOSES leads, because that is the day its
+                    gain or loss belongs to and the day it lines up with on
+                    Readings. When the rod actually went in is the second line
+                    - real, but not what anyone is scanning this column for. */}
+                <th className="th">Day checked</th>
                 <th className="th">Tank</th>
                 <th className="th text-right">Expected</th>
                 <th className="th text-right">Measured</th>
@@ -203,9 +228,19 @@ export default async function StockChecksPage({ searchParams }) {
             <tbody className="divide-y divide-ink-100">
               {pageChecks.map((check) => {
                 const difference = Number(check.gain_loss);
+                // The first dip on a tank has no earlier measurement behind it,
+                // so its "gain" is really a disagreement with the opening stock
+                // in Settings. Named, and not coloured as a surplus.
+                const firstDip =
+                  (check.books_date ?? check.check_date) === earliestByTank.get(check.tank_id);
                 return (
                   <tr key={check.id}>
-                    <td className="td whitespace-nowrap">{formatDate(check.check_date)}</td>
+                    <td className="td whitespace-nowrap">
+                      {formatDate(check.books_date ?? check.check_date)}
+                      <span className="block text-xs text-ink-500">
+                        dipped {check.taken ?? 'morning'} of {formatDate(check.check_date)}
+                      </span>
+                    </td>
                     <td className="td">
                       <FuelBadge fuelType={check.tank?.fuel_type} />
                     </td>
@@ -216,13 +251,20 @@ export default async function StockChecksPage({ searchParams }) {
                         'td-num font-bold',
                         difference === 0
                           ? 'text-ink-600'
-                          : difference > 0
-                            ? 'text-brand-700'
-                            : 'text-red-700',
+                          : firstDip
+                            ? 'text-amber-900'
+                            : difference > 0
+                              ? 'text-brand-700'
+                              : 'text-red-700',
                       ].join(' ')}
                     >
-                      {difference > 0 ? '+' : ''}
-                      {formatLitres(difference)}
+                      {difference > 0 && !firstDip ? '+' : ''}
+                      {firstDip ? formatLitres(Math.abs(difference)) : formatLitres(difference)}
+                      {firstDip ? (
+                        <span className="block text-xs font-normal text-ink-500">
+                          vs opening stock
+                        </span>
+                      ) : null}
                     </td>
                     <td className="td text-ink-600">{check.note ?? '—'}</td>
                   </tr>

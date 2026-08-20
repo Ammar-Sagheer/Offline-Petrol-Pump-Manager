@@ -9,6 +9,7 @@ import Toast from '@/app/_components/ui/Toast';
 import Dialog from '@/app/_components/ui/Dialog';
 import NumberInput from '@/app/_components/ui/NumberInput';
 import BalanceDirection from '@/app/_components/admin/BalanceDirection';
+import Button from '@/app/_components/ui/Button';
 
 const moneyFormat = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -77,19 +78,18 @@ export default function CustomerForm() {
 
   return (
     <>
-      <button
+      <Button variant="primary"
         type="button"
         onClick={() => {
           setShowResult(false);
           setIsOpen(true);
         }}
-        className="btn-primary"
       >
         <span aria-hidden="true" className="text-base leading-none">
           +
         </span>
         New customer
-      </button>
+      </Button>
 
       <Dialog
         open={isOpen}
@@ -262,12 +262,12 @@ export default function CustomerForm() {
           <FormMessage state={showResult ? state : null} />
 
           <div className="flex gap-2 border-t border-ink-200 pt-3">
-            <SubmitButton className="btn-primary flex-1" pendingLabel="Saving…">
+            <SubmitButton className="flex-1"  pendingLabel="Saving…">
               Create customer
             </SubmitButton>
-            <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={() => setIsOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

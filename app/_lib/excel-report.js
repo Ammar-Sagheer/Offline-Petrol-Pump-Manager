@@ -21,6 +21,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
 
+import { ASSET_CATEGORIES } from './asset-categories';
+
 const TEMPLATE_PATH = path.join(process.cwd(), 'app', '_lib', 'report-template.xlsx');
 
 /**
@@ -37,7 +39,19 @@ const SHEET_FILES = {
   Readings: 'xl/worksheets/sheet7.xml',
   Bank: 'xl/worksheets/sheet8.xml',
   Lubricants: 'xl/worksheets/sheet9.xml',
+  Assets: 'xl/worksheets/sheet10.xml',
 };
+
+/*
+ * Category comes out of Postgres as its enum value (`vehicle`), and the app
+ * shows the label (`Vehicle`). The workbook has to say what the screen says or
+ * the owner is reading two different vocabularies for one field, so this maps
+ * through the SAME list the picker and the page use rather than capitalising
+ * the string by hand.
+ */
+const ASSET_CATEGORY_LABEL = Object.fromEntries(
+  ASSET_CATEGORIES.map((category) => [category.value, category.label]),
+);
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
                 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -182,6 +196,7 @@ export async function buildMonthlyWorkbook(data, { generatedOn, businessName } =
   const lubricantSales = data.lubricant_sales ?? {};
   const lubricantPurchases = data.lubricant_purchases ?? {};
   const bankMonth = data.bank_month ?? {};
+  const assets = data.assets ?? {};
   const [year, month] = String(data.from).slice(0, 10).split('-').map(Number);
 
   // ---- Summary: label / value pairs, written as plain rows ----
@@ -246,6 +261,18 @@ export async function buildMonthlyWorkbook(data, { generatedOn, businessName } =
       `  ${account.account} balance`,
       num(account.balance),
     ]),
+    ['', ''],
+    // Assets sit apart from profit for the same reason the bank block does,
+    // and the note says so out loud. Money spent on a delivery bike is not a
+    // cost of trading the way a fuel delivery is - the pump still has the
+    // bike. The app has never counted it in profit, and a figure on this
+    // sheet without that sentence is one somebody subtracts by hand.
+    ['COMPANY ASSETS', ''],
+    ['Bought this month (count)', assets.month_count ?? 0],
+    ['Bought this month (value)', num(assets.month_value)],
+    ['Owned in total (count)', assets.count ?? 0],
+    ['Owned in total (value)', num(assets.total_value)],
+    ['', 'Not counted in profit above - see the Assets sheet.'],
     ['', ''],
     ['Note', 'Profit counts stock BOUGHT this month - fuel and lubricants alike -'],
     ['', 'not stock sold from the tank or the shelf. A large delivery near month'],
@@ -369,6 +396,48 @@ export async function buildMonthlyWorkbook(data, { generatedOn, businessName } =
   ]);
   const lubricantsXml = await zip.file(SHEET_FILES.Lubricants).async('string');
   zip.file(SHEET_FILES.Lubricants, writeSheet(lubricantsXml, lubricantRows));
+
+  // ---- Assets ----
+  //
+  // THE WHOLE REGISTER, not just what was bought this month, which is why this
+  // sheet is the one that ignores the report's date range. An asset register
+  // answers "what does the business own", and most months the pump buys
+  // nothing at all - a month-scoped sheet would be empty in those months and
+  // read as a bug rather than as a fact. "Bought this month" is a column
+  // instead, so the sheet still filters down to the month when that is the
+  // question. `bank_accounts` on the Summary sheet takes the same line: a
+  // standing balance beside the month's movements.
+  const assetRows = (data.asset_rows ?? []).map((row) => [
+    toExcelDate(row.date),
+    row.name ?? '',
+    ASSET_CATEGORY_LABEL[row.category] ?? row.category ?? '',
+    num(row.value),
+    // A word, not a tick: a blank cell against a boolean column is ambiguous
+    // between "no" and "nothing was written here", and this column is the one
+    // the owner will filter on.
+    row.in_month ? 'Yes' : 'No',
+    row.note ?? '',
+  ]);
+  // A TOTAL AT THE FOOT, because the question this sheet is opened to answer
+  // is "what is all of it worth" and a column of twelve figures does not
+  // answer it without the reader reaching for a calculator. It comes from the
+  // `assets` summary rather than adding the rows up here, so the sheet and the
+  // Summary block cannot disagree - they are then the same figure from the
+  // same query rather than two counts that happen to match today.
+  if (assetRows.length > 0) {
+    assetRows.push(['', '', '', '', '', '']);
+    assetRows.push([
+      '',
+      `Total owned — ${assets.count ?? assetRows.length} asset${(assets.count ?? 0) === 1 ? '' : 's'}`,
+      '',
+      num(assets.total_value),
+      '',
+      '',
+    ]);
+  }
+
+  const assetsXml = await zip.file(SHEET_FILES.Assets).async('string');
+  zip.file(SHEET_FILES.Assets, writeSheet(assetsXml, assetRows));
 
   return zip.generateAsync({
     type: 'nodebuffer',

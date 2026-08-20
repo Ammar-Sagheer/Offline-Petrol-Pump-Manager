@@ -80,7 +80,7 @@ export default function PaymentForm({ customerId, balance }) {
 
       <FormMessage state={state} />
 
-      <SubmitButton className="btn-primary w-full">Record payment</SubmitButton>
+      <SubmitButton fullWidth >Record payment</SubmitButton>
     </form>
   );
 }

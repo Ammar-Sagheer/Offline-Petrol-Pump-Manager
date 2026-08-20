@@ -8,6 +8,7 @@ import FormMessage from '@/app/_components/ui/FormMessage';
 import SubmitButton from '@/app/_components/ui/SubmitButton';
 import Toast from '@/app/_components/ui/Toast';
 import NumberInput from '@/app/_components/ui/NumberInput';
+import Button from '@/app/_components/ui/Button';
 
 /**
  * Which tank each nozzle draws from, and where its meter started - behind a
@@ -43,19 +44,18 @@ export default function NozzleSettingsButton({ nozzles, tanks }) {
 
   return (
     <>
-      <button
+      <Button variant="secondary"
         type="button"
         onClick={() => {
           setShowResult(false);
           setIsOpen(true);
         }}
-        className="btn-secondary"
       >
         <span aria-hidden="true" className="text-base leading-none">
           ✎
         </span>
         Edit nozzle wiring
-      </button>
+      </Button>
 
       <Dialog
         open={isOpen}
@@ -149,12 +149,12 @@ export default function NozzleSettingsButton({ nozzles, tanks }) {
           <FormMessage state={showResult ? state : null} />
 
           <div className="flex gap-2 border-t border-ink-200 pt-4">
-            <SubmitButton className="btn-primary flex-1" pendingLabel="Saving…">
+            <SubmitButton className="flex-1"  pendingLabel="Saving…">
               Save wiring
             </SubmitButton>
-            <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={() => setIsOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

@@ -389,16 +389,13 @@ export default function BankTransactionForm({ accounts }) {
           leaves as a toast. */}
       <FormMessage state={state?.ok === false ? state : null} />
 
+      {/* Blocked keeps its own red treatment rather than a variant: it is not
+          a choice the reader can make, it is the form saying why it cannot be
+          submitted, so it reads as a message shaped like a button. */}
       <SubmitButton
         disabled={blocked}
-        className={
-          blocked
-            ? `inline-flex w-full items-center justify-center rounded-lg border border-red-200
-               bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 disabled:cursor-not-allowed`
-            : isDeposit
-              ? 'btn-primary w-full'
-              : 'btn-secondary w-full'
-        }
+        fullWidth
+        variant={blocked ? 'danger' : isDeposit ? 'primary' : 'secondary'}
       >
         {blocked
           ? `${money(shortfall)} still not covered`

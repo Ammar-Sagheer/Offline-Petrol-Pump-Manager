@@ -219,11 +219,13 @@ export default async function LubricantsPage({ searchParams }) {
           <div className="mb-4" aria-label="Oil sales for the day">
             <StatGrid>
               <StatTile
+                icon="lubricants"
                 label="Oil sold today"
                 value={formatPKR(dayAmount)}
                 sub="packed and loose together"
               />
               <StatTile
+                icon="inventory"
                 label="Packed, off the shelf"
                 value={formatPKR(packAmount)}
                 sub={
@@ -233,6 +235,7 @@ export default async function LubricantsPage({ searchParams }) {
                 }
               />
               <StatTile
+                icon="stock"
                 label="Loose, out of the drum"
                 value={formatPKR(looseAmount)}
                 sub={
@@ -244,6 +247,7 @@ export default async function LubricantsPage({ searchParams }) {
                 }
               />
               <StatTile
+                icon="credit"
                 label="On credit"
                 value={formatPKR(dayCredit)}
                 sub={dayAmount > 0 ? `${creditShare}% of the day · rest was cash` : null}

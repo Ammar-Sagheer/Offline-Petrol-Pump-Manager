@@ -67,7 +67,7 @@ export default function Dialog({ open, onClose, title, subtitle, size = 'md', ch
       ref={dialogRef}
       aria-label={title}
       className={`m-0 max-h-none w-full max-w-none bg-transparent p-0
-                 backdrop:bg-ink-900/50
+                 backdrop:bg-ink-900/60 backdrop:backdrop-blur-sm
                  sm:m-auto sm:max-h-[90dvh] ${
                    size === 'lg'
                      ? 'sm:w-[min(48rem,calc(100vw-2rem))]'
@@ -83,13 +83,42 @@ export default function Dialog({ open, onClose, title, subtitle, size = 'md', ch
             <h2 className="text-sm font-bold text-ink-900">{title}</h2>
             {subtitle ? <div className="mt-0.5">{subtitle}</div> : null}
           </div>
+          {/*
+           * A REAL BUTTON, NOT A GLYPH FLOATING IN THE CORNER. It was a bare
+           * ✕ in `ink-500` with no edge until hover, which on a white header
+           * reads as decoration rather than a control - and this dialog is the
+           * only way out of the entry task, so the way out has to look like
+           * one.
+           *
+           * It is also a TARGET. At 44px square it clears the tap-target floor
+           * this app holds everywhere else; the old one was about 28px, which
+           * on a tablet held one-handed at the pump is a miss waiting to
+           * happen - and a miss here lands on the backdrop, which does nothing
+           * (see the note above about click-outside), so the reader taps twice
+           * and wonders why.
+           *
+           * `hover:text-red-700` and not a red default: leaving is not a
+           * destructive act, so the button should not sit there coloured like
+           * one. The red is a response to being aimed at.
+           */}
           <button
             type="button"
             onClick={() => dialogRef.current?.close()}
             aria-label="Close"
-            className="shrink-0 rounded-lg px-2 py-1 text-lg leading-none text-ink-500 hover:bg-ink-100 hover:text-ink-900"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-ink-200
+                       bg-ink-50 text-xl leading-none text-ink-600 transition
+                       hover:border-red-200 hover:bg-red-50 hover:text-red-700
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
           >
-            ✕
+            <svg viewBox="0 0 20 20" className="h-5 w-5" aria-hidden="true">
+              <path
+                d="M5 5l10 10M15 5L5 15"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+            </svg>
           </button>
         </header>
 

@@ -7,6 +7,7 @@ import SubmitButton from '@/app/_components/ui/SubmitButton';
 import FormMessage from '@/app/_components/ui/FormMessage';
 import Toast from '@/app/_components/ui/Toast';
 import Dialog from '@/app/_components/ui/Dialog';
+import Button from '@/app/_components/ui/Button';
 
 /**
  * Wipes the day on screen so it can be entered again. Owner only.
@@ -53,10 +54,14 @@ export default function ClearDayButton({ date, dateLabel, entryCount }) {
     <>
       {/* Sized like the buttons it sits beside rather than as quiet small text:
           clearing a day is a real thing an owner comes to this screen to do, and
-          it was easy to miss. The styles are written out rather than using
-          .btn-danger so that with nothing to clear the button goes properly grey
-          instead of a faded red - unavailable at a glance, not a warning. */}
-      <button
+          it was easy to miss.
+
+          This used to write its styles out by hand rather than use .btn-danger,
+          so that with nothing to clear it went properly grey instead of a faded
+          red - unavailable at a glance, not a warning. MUI's own disabled state
+          is that grey, so the variant can now be used directly. */}
+      <Button
+        variant="danger"
         type="button"
         onClick={openDialog}
         disabled={nothingToClear}
@@ -65,17 +70,10 @@ export default function ClearDayButton({ date, dateLabel, entryCount }) {
             ? 'Nothing has been entered for this day yet'
             : `Clear all entries for ${dateLabel}`
         }
-        className={[
-          'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg',
-          'border px-4 py-2.5 text-sm font-semibold transition',
-          nothingToClear
-            ? 'cursor-not-allowed border-ink-200 bg-ink-100 text-ink-400'
-            : `border-red-300 bg-white text-red-700 hover:bg-red-50
-               focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600`,
-        ].join(' ')}
+        className="whitespace-nowrap"
       >
         Clear this day
-      </button>
+      </Button>
 
       <Dialog
         open={isOpen}
@@ -119,12 +117,12 @@ export default function ClearDayButton({ date, dateLabel, entryCount }) {
           <FormMessage state={result} />
 
           <div className="flex gap-2">
-            <SubmitButton className="btn-danger flex-1" pendingLabel="Clearing…">
+            <SubmitButton variant="danger" className="flex-1"  pendingLabel="Clearing…">
               Clear this day
             </SubmitButton>
-            <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary">
+            <Button variant="secondary" type="button" onClick={() => setIsOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>

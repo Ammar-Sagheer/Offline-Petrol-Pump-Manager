@@ -55,18 +55,28 @@ Closing the app stops both cleanly. Backing up is copying one folder.
 
 ## Where things live (mirrors the reference repo's structure exactly)
 
-- `db/migrations/001-009` - the entire data model, consolidated from the
-  reference repo's 21 Supabase migrations into their final state (not
-  replayed step-by-step - Supabase-specific workarounds like the
-  `safeupdate` library dance don't apply here). Every trigger, constraint,
-  and the full banking module carried over untouched in logic; only the
-  identity plumbing changed.
+- `db/migrations/001-030` - the entire data model. `001-009` is the original
+  consolidation of the reference repo's first 21 Supabase migrations into
+  their final state (not replayed step-by-step - Supabase-specific
+  workarounds like the `safeupdate` library dance don't apply here);
+  `010` onwards are ported one-for-one as the reference adds them, so
+  `013-024` = reference `024-035` and `025-030` = reference `036/039-043`.
+  The numbers never line up, and they are not meant to - compare *contents*,
+  never numbers. Each file's header names the reference migration it came
+  from and what had to change. Every trigger, constraint, and the full
+  banking module carried over untouched in logic; only the identity plumbing
+  changed - `auth.uid()` becomes `current_uid()`, `authenticated`/`anon`
+  become `app_user`.
 - `app/_lib/db.js`, `auth.js` - replace `supabase.js`/`supabase-server.js`/
   `supabase-auth.js`. Connection pooling, session cookies (iron-session),
   the `withUser(userId, fn)` helper every read/write goes through.
 - `app/_lib/data-service.js`, `actions.js` - mechanical port to the `pg`
   driver, same function names/shapes as the reference app, which is why the
-  ~30 admin components and ~25 page routes needed zero changes.
+  ~40 admin components and ~27 page routes are copied across verbatim. That
+  is the whole point of keeping the names identical: when the reference
+  moves, the sync is a file copy for everything except these two files and
+  the handful listed under "The one deliberate UI difference" in
+  PROGRESS.md.
 - `electron/` - `main.js` (window + child process lifecycle), `bootstrap-db.js`
   (starts Postgres, runs pending migrations, mints the `app_user` password),
   `config.js` (per-install secrets in the OS app-data folder).
@@ -74,6 +84,9 @@ Closing the app stops both cleanly. Backing up is copying one folder.
   app never needed this since Supabase Auth handled signup).
 - `app/admin/backup/` - copies the data folder safely while the app keeps
   running, via Postgres's own `pg_backup_start()`/`pg_backup_stop()` (new).
+- `app/_components/ui/AppTheme.js` + the `AppRouterCacheProvider` in
+  `app/layout.js` - Material UI's Emotion cache. The icon set is MUI's, and
+  without this wrapper every icon hydrates mismatched.
 
 ## Commands
 
