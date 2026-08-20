@@ -259,6 +259,61 @@ lie to you.
    `app/admin/backup` (safe live copy of the data folder via
    `pg_backup_start()`/`pg_backup_stop()`).
 
+## In-app licence renewal (2026-08-21)
+
+Renewing a licence used to mean quitting the app: the only paste box for a
+token was the pre-launch window in `electron/licence-window.js`, so a licence
+that lapsed mid-shift forced a client to close a half-typed reading to fix it.
+Now:
+
+- `RestrictedBanner` (the red bar) carries a **Renew now** button, and the
+  dialog opens by itself once per run of the app when restricted -
+  `sessionStorage`-flagged, so it does not reappear on every navigation.
+  Dismissing it leaves the banner and button.
+- A **Licence** panel at the foot of Settings shows business name, licence
+  key and support-until date, and can renew EARLY, before anything blocks.
+- `app/_components/ui/RenewLicenceDialog.js` is shared by both.
+
+Four decisions worth not re-litigating:
+
+1. **Renewal goes through the preload bridge, not a Server Action.** The
+   token has to be checked against this machine's fingerprint, which only
+   main can read. A Next-side implementation would have meant a second
+   signature-verification path that can disagree with the first about what a
+   valid licence is. `preload.js` therefore exposes three functions now, not
+   one; its header comment was rewritten rather than quietly outgrown.
+2. **`saveLicence()` clearing `restricted` IS the unblock mechanism.** There
+   is deliberately no separate "unrestrict" call that could drift out of step
+   with it.
+3. **The Settings panel reads `licence.json` fresh (`storedLicence()`), not
+   the memoised `getLicence()`.** `getLicence()` reads `LICENCE_TOKEN`,
+   snapshotted into the Next child's env at spawn - so an env-based panel
+   would still show the OLD support date on the very screen someone had just
+   renewed from, until the app restarted. The brand name still comes from the
+   memoised env read and so stays stale until relaunch; that is fine, since a
+   renewal reuses the same business name, and a name that flickered
+   mid-session would be worse.
+4. **`router.refresh()` is deferred to dialog close.** Refreshing on success
+   re-renders the layout, which drops the banner - and the dialog is rendered
+   BY the banner, so an immediate refresh unmounted the box showing the
+   "renewed" confirmation. Nothing waits on it: `requireRole()` reads
+   `licence.json` per call, so data entry works again the instant the token
+   is written.
+
+`extractToken()` (pull the token out of a pasted .txt, header and all) moved
+into `electron/licence.js` so main owns one authority for it. The renderer
+keeps a mirror copy, because it cannot `require()` a main-process module and
+the box has to show the cleaned token the moment a file is picked; main
+re-extracts whatever it is sent regardless, so a drift between the two is
+cosmetic, never a wrong activation. Both copies were tested to agree on the
+whole .txt, a WhatsApp-wrapped token, a bare token, CRLF and padded input.
+
+Verified with Electron's `app` stubbed against the real modules: a stored
+licence with `restricted: true` goes to `false` on `saveLicence()`; a token
+with four characters altered is refused ("licence signature does not
+verify"); a licence for another machine is refused. NOT yet verified by
+clicking through a packaged install - see "What's not yet done".
+
 ## How each piece was verified
 
 - All 9 migrations applied cold against a real Postgres 16 instance.
@@ -481,6 +536,14 @@ steps further in - that's expected, not a sign the previous fix was wrong.
 
 ## What's not yet done / worth knowing about
 
+- **In-app licence renewal: built, not click-tested on hardware** - the
+  logic is verified against the real modules with Electron's `app` stubbed
+  (see the section above), and `npm run build` is clean, but nobody has yet
+  opened a restricted install, pressed **Renew now**, pasted a real token
+  and watched the red banner go. Worth doing on the owner's machine with a
+  licence issued for that machine's own code - note the dev machine's
+  fingerprint is `4205-E583-2DDF-F8EF-32AC-2A5C-6DEA-0924`, which matches
+  neither issued test licence, so testing needs a token minted for it.
 - **In-app restore button: designed, not built** -
   `docs/RESTORE_FROM_BACKUP.md` has the full design, the constraints that
   force it into the Electron main process rather than a Server Action, the

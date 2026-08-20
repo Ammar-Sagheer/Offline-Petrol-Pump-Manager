@@ -185,6 +185,40 @@ function localClockPastSupport(payload) {
 }
 
 /**
+ * Pulls the actual token out of whatever text is on hand - which is not
+ * always JUST the token. A client hands over the whole .txt file
+ * tools/issue-licence.js writes (a human-readable header, then the token),
+ * and pasting works the same way if someone does "select all" in Notepad
+ * rather than carefully highlighting one line - a completely normal thing
+ * to do.
+ *
+ * NOT a blind "strip every whitespace character" - an earlier version of the
+ * activation window did that, and it silently fused the header's last date
+ * onto the front of the token with no boundary between them (the blank line
+ * separating the two is whitespace too, so removing it joined "...2027-08-08"
+ * directly onto "eyJ2Ijo...", corrupting the payload while still LOOKING like
+ * a plausible token). Line-by-line instead: keep only lines that, once
+ * trimmed, are made purely of token-safe characters (base64url plus the one
+ * '.' separator) - every header line has a space, a colon or parentheses, so
+ * this is exactly what discards them. A token wrapped by WhatsApp/Mail across
+ * several lines survives too: each fragment is still pure token-safe
+ * characters on its own line, so every kept line simply joins back together
+ * in order.
+ *
+ * Lives here rather than only in the window that first needed it: the
+ * in-app renewal dialog feeds this same function from a completely
+ * different direction (see the 'licence-renew' handler in main.js), and one
+ * bug fixed in two places is a bug still shipping in one of them.
+ */
+function extractToken(rawText) {
+  return String(rawText)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && /^[A-Za-z0-9_.-]+$/.test(line))
+    .join('');
+}
+
+/**
  * The grace period's start, recorded in licence.json itself so it cannot be
  * renewed by deleting some other file and restarting - see
  * docs/LICENSING_PLAN.md, "A grace path for pre-licensing installs".
@@ -202,6 +236,7 @@ function ensureGraceStarted() {
 module.exports = {
   fingerprint,
   verify,
+  extractToken,
   isExpired,
   loadLicence,
   saveLicence,

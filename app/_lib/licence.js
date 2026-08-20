@@ -78,6 +78,31 @@ export function graceUntil() {
 }
 
 /**
+ * The licence as it stands ON DISK right now, verified, or null if this
+ * install has none - deliberately NOT the same source as getLicence().
+ *
+ * getLicence() reads LICENCE_TOKEN, snapshotted into this process's
+ * environment when Electron spawned it, and memoises the result. That is
+ * right for the brand name, which must not flicker mid-session. It is wrong
+ * for anything that has to reflect a renewal: renewing writes licence.json
+ * from the main process while this server keeps running, so an env-based
+ * read would still show the OLD support date on the very screen someone
+ * just renewed from, until the app was restarted. Hence a fresh file read,
+ * for the same reason isRestricted() below does one.
+ */
+export function storedLicence() {
+  const appDataDir = process.env.APP_DATA_DIR;
+  if (!appDataDir) return null; // plain `npm run dev`, nothing to read
+
+  try {
+    const { token } = JSON.parse(fs.readFileSync(path.join(appDataDir, 'licence.json'), 'utf8'));
+    return token ? verify(token) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Whether this install is currently soft-restricted - see
  * docs/LICENSING_PLAN.md, "Restricting after the support date". Read fresh
  * from licence.json on every call, deliberately NOT memoised like

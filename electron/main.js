@@ -23,7 +23,17 @@ const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const { bootstrapDatabase } = require('./bootstrap-db');
 const { loadOrCreateConfig, userDataDir, dbDataDir, configPath } = require('./config');
 const { requireLicence } = require('./licence-window');
-const { loadLicence, setRestricted, localClockPastSupport } = require('./licence');
+const {
+  loadLicence,
+  saveLicence,
+  setRestricted,
+  localClockPastSupport,
+  fingerprint,
+  verify,
+  isExpired,
+  isRestricted,
+  extractToken,
+} = require('./licence');
 const { checkOnlineStatus } = require('./licence-status');
 
 const isDev = process.env.ELECTRON_DEV === 'true';
@@ -415,6 +425,69 @@ async function performRestore(sourcePath) {
 }
 
 ipcMain.handle('restore-from-backup', (_event, sourcePath) => performRestore(sourcePath));
+
+/**
+ * In-app licence renewal - the two handlers behind the Renew dialog (see
+ * app/_components/ui/RenewLicenceDialog.js). Registered here at module load
+ * and never torn down, unlike licence-window.js's own 'licence-*' handlers,
+ * which exist only for as long as the pre-launch activation window is open.
+ * The channel names are deliberately different from that window's for the
+ * same reason: both can be registered at once during a first-run activation,
+ * and two handlers on one channel is an outright throw.
+ *
+ * Why renewal happens here at all rather than by relaunching into the
+ * activation window: a licence that has run out is not a reason to interrupt
+ * a shift. The reading being typed when the renewal arrives should still be
+ * there afterwards - so nothing here touches the session, the Next child, or
+ * the window. It writes licence.json and returns; the renderer refreshes and
+ * the restriction is simply gone, because isRestricted() on the Next side
+ * reads that file fresh on every call (app/_lib/licence.js).
+ */
+ipcMain.handle('licence-info', () => {
+  const stored = loadLicence();
+  return {
+    code: fingerprint(),
+    restricted: isRestricted(),
+    licence: stored
+      ? {
+          business: stored.payload.b,
+          key: stored.payload.k,
+          seat: stored.payload.s,
+          issued: stored.payload.ia,
+          supportUntil: stored.payload.su,
+        }
+      : null,
+  };
+});
+
+ipcMain.handle('licence-renew', (_event, rawText) => {
+  let payload;
+  const cleaned = extractToken(rawText);
+  try {
+    payload = verify(cleaned);
+  } catch {
+    return {
+      ok: false,
+      message: "That doesn't look like a licence. Try the 'Load from file' button.",
+    };
+  }
+  // Same three refusals, in the same order and the same words, as the
+  // activation window's own handler - a client who sees one of these while
+  // renewing should not be told something different from what they were told
+  // the first time.
+  if (payload.m !== fingerprint()) {
+    return { ok: false, message: 'That licence was issued for a different computer.' };
+  }
+  if (isExpired(payload)) {
+    return { ok: false, message: `That licence expired on ${payload.ex}.` };
+  }
+
+  // Clears `restricted` as a side effect - see saveLicence()'s own comment.
+  // That is the whole mechanism by which renewing lifts the block; there is
+  // deliberately no separate "unrestrict" call to get out of step with it.
+  saveLicence(cleaned);
+  return { ok: true, supportUntil: payload.su, business: payload.b };
+});
 
 app.whenReady().then(async () => {
   try {

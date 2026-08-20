@@ -88,15 +88,54 @@ field), not by machine code - one key blocks every seat issued under it.
    viewable/exportable, only new entries are refused. No action needed on
    their end.
 
-## 5. Unblocking / renewing
+## 5. Renewing a client (extending their support date)
+
+Reissue the SAME licence key for the same machine with a later `--support`
+date - `--key` is what keeps both rows under one client in the register
+instead of minting a second key for them:
+
+```bash
+node tools/issue-licence.js   --machine <their machine code>   --business "Client Business Name" --initials CBN   --seat 1 --support 2027-08-11   --key PM-XXXX-XXXX-XXXX
+```
+
+Send them the regenerated `.txt`. Nothing about this touches any other
+client - every token is signed independently, and each install only ever
+reads its own.
+
+### Renewing from inside the app
+
+The client does NOT have to reinstall or reopen the app, and is NOT signed
+out. When a licence lapses the red banner carries a **Renew now** button,
+and the renewal dialog also opens by itself the first time a restricted
+install draws an admin page - dismissible, and closing it leaves the banner
+and its button standing. There is also a **Licence** panel at the bottom of
+Settings showing the business name, licence key and support-until date,
+which can activate a renewal EARLY, before anything is blocked.
+
+Either way: paste the licence (or **Load from file** and pick the `.txt`),
+press Renew. The token is verified against this machine exactly as at first
+activation, `licence.json` is rewritten, and the restriction lifts - data
+entry works again immediately, no relaunch, no re-login.
+
+Two things worth knowing when a client says it did not work:
+
+- **The machine code has to match.** A licence issued against the wrong code
+  is refused with "That licence was issued for a different computer." Ask
+  them to read back the installation code shown in the renewal dialog - it
+  is the same code they sent at first activation.
+- **Renewal does NOT lift a manual block.** If the key is still in
+  `blocked-licences.json`, the online check restricts them again within
+  ~10s of the next launch with internet, however fresh the token is. Take
+  the key out of that file when a blocked client pays - see section 6.
+
+## 6. Unblocking
 
 Remove that key from `blocked-licences.json`, commit, push. Next time their
 app has internet it clears automatically, same ~10s-after-launch check.
 
 (If the block was instead triggered by their support date passing rather
-than by this file, see `docs/LICENSING_PLAN.md`'s "Restricting after the
-support date" section - the client should just be issued and activate a
-renewed licence, which always clears any restriction outright.)
+than by this file, that is a renewal and not an unblock - see section 5. A
+renewed licence always clears the restriction outright.)
 
 ## Verifying any of the above actually happened
 

@@ -6,12 +6,14 @@ import {
   fullResetAllowed,
 } from '@/app/_lib/helpers';
 import { getTanks, getNozzles, getRecentFuelPrices, getCurrentRates } from '@/app/_lib/data-service';
+import { storedLicence, isRestricted } from '@/app/_lib/licence';
 import PageHeader from '@/app/_components/ui/PageHeader';
 import FuelBadge from '@/app/_components/ui/FuelBadge';
 import FuelPriceForm from '@/app/_components/admin/FuelPriceForm';
 import TankForm from '@/app/_components/admin/TankForm';
 import NozzleSettingsButton from '@/app/_components/admin/NozzleSettingsButton';
 import FullResetPanel from '@/app/_components/admin/FullResetPanel';
+import LicencePanel from '@/app/_components/admin/LicencePanel';
 import FuelPriceTable from '@/app/_components/admin/FuelPriceTable';
 import PendingLink from '@/app/_components/ui/PendingLink';
 
@@ -100,6 +102,14 @@ export default async function SettingsPage() {
           <TankForm key={tank.id} tank={tank} />
         ))}
       </div>
+
+      {/* ---- licence ---- */}
+      {/* Last, under the things touched daily: this is a once-a-year screen,
+          and read fresh off licence.json rather than from the memoised
+          getLicence() so a renewal done in the dialog below shows its new
+          date immediately - see storedLicence(). */}
+      <h2 className="section-heading">Licence</h2>
+      <LicencePanel licence={storedLicence()} restricted={isRestricted()} />
 
       {/* Testing scaffolding. Gone the moment ALLOW_FULL_RESET is removed from
           the server, with no code change - see fullResetAllowed(). */}
