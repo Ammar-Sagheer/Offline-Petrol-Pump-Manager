@@ -314,6 +314,44 @@ with four characters altered is refused ("licence signature does not
 verify"); a licence for another machine is refused. NOT yet verified by
 clicking through a packaged install - see "What's not yet done".
 
+## Menu bar removed, and the logo is now the licensed initials (2026-08-21)
+
+Two things a client actually saw and reported:
+
+- **Electron's stock menu bar was still there** - there had never been any
+  menu code, so File / Edit / View / Window / Help was the framework default,
+  and its Help entry links out to electronjs.org. Now
+  `Menu.setApplicationMenu(null)` in `electron/main.js`. The whole bar rather
+  than just Help: the rest earns nothing on a single-purpose till screen, and
+  View's zoom/fullscreen are mostly ways to leave the display in a state the
+  next person has to undo. Ctrl+C/V/X/A and Ctrl+Z still work in text fields
+  - Chromium handles those natively, with no menu entry needed.
+- **Every install wore one client's flower logo.** `public/logo.png` shipped
+  inside the installer, so the picture beside the business name was the same
+  for everyone regardless of who the copy was licensed to - precisely the bug
+  that moving BUSINESS_NAME into the licence had fixed for the name, left
+  standing for the mark next to it. `BrandMark` now draws the licensed
+  initials (`i` in the token) as a monogram tile, so each install marks
+  itself correctly with no per-client build and no image to ship. `LOGO_SRC`
+  is gone from `app/_lib/brand.js`; putting a single image back would bring
+  the original bug back with it.
+
+The mark is an **SVG, not a styled div**. Callers size it by height alone
+(h-10 in the sidebar, h-16 on login) and the old tile set its letters at a
+fixed `text-xs` regardless, so the mark that fitted the sidebar sat as three
+tiny letters adrift in the login screen's box. In a viewBox everything scales
+together. `textLength` with `lengthAdjust="spacingAndGlyphs"` is what makes
+two- and three-letter initials both fill the tile instead of MPS spilling wide
+while MP floats in the middle.
+
+Verified by rendering it offscreen through Electron's own Chromium
+(`capturePage()`) at 24/40/64px, with two- and three-letter initials, on white
+and on a card: legible at all three sizes, both letter counts optically even.
+Note for anyone repeating that trick - this environment sets
+`ELECTRON_RUN_AS_NODE=1`, which makes electron.exe behave as plain Node and
+`require('electron')` return a path string; `env -u ELECTRON_RUN_AS_NODE` is
+what makes an offscreen capture script work at all.
+
 ## How each piece was verified
 
 - All 9 migrations applied cold against a real Postgres 16 instance.

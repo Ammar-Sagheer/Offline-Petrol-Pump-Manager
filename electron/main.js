@@ -19,7 +19,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
 const { bootstrapDatabase } = require('./bootstrap-db');
 const { loadOrCreateConfig, userDataDir, dbDataDir, configPath } = require('./config');
 const { requireLicence } = require('./licence-window');
@@ -488,6 +488,28 @@ ipcMain.handle('licence-renew', (_event, rawText) => {
   saveLicence(cleaned);
   return { ok: true, supportUntil: payload.su, business: payload.b };
 });
+
+/**
+ * No application menu at all.
+ *
+ * There was never any menu code here, which meant Electron's stock one -
+ * File / Edit / View / Window / Help - and its Help entry links out to
+ * electronjs.org, documentation for the framework this happens to be built
+ * with. Nothing on it belongs in front of a pump attendant, and one of its
+ * items advertises what the app is made of to a client who has no reason to
+ * care and no reason to click it.
+ *
+ * Removing the whole bar rather than trimming Help off it: the rest is not
+ * doing any work either. This is a single-purpose till screen, and View's
+ * zoom levels and fullscreen toggle are, on a shared machine, mostly ways to
+ * leave the display in a state the next person has to undo. The editing
+ * shortcuts everyone actually uses - Ctrl+C/V/X/A, Ctrl+Z in a text field -
+ * are handled natively by Chromium and do NOT need a menu entry to work;
+ * they were tested with the bar gone.
+ *
+ * Called before the window exists, since the menu is process-wide.
+ */
+Menu.setApplicationMenu(null);
 
 app.whenReady().then(async () => {
   try {

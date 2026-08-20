@@ -1,70 +1,101 @@
 'use client';
 
-import { useState } from 'react';
-
-import { LOGO_SRC } from '@/app/_lib/brand';
 import { useBrand } from '@/app/_components/ui/BrandProvider';
 
 /**
- * The logo, with an initials tile behind it.
+ * The business's mark: its licensed initials, drawn as a monogram tile.
  *
- * SIZED BY HEIGHT ONLY. The caller says how tall, never how wide, and the logo
- * takes whatever width its own proportions ask for. A fixed square box has to
- * letterbox anything that is not square - the lockup here is about 1.4:1, so in
- * a 36px square it was drawn 36 wide by 26 tall and looked smaller than the
- * plain initials tile it replaced. Height-only means a square logo and a wide
- * one both come out the right size, and swapping the file for a differently
- * shaped one needs no code change.
+ * WAS AN IMAGE FILE (public/logo.png) with an initials tile behind it as a
+ * fallback. That went because the file shipped in the installer was one
+ * client's own flower logo, so every install - whoever it was licensed to -
+ * wore somebody else's branding. Exactly the bug licensing was built to fix
+ * for the business NAME, still present for the picture next to it. The
+ * initials come from the signed licence (`i`), so each client's install now
+ * marks itself correctly with no per-client build and no image to ship.
  *
- * The initials fall back to a square, since two or three letters in a wide box
- * would sit in a lot of empty colour.
+ * SVG, NOT A STYLED <div>. The caller sizes this by height alone (h-10 in
+ * the sidebar, h-16 on the login screen) and the old tile set its letters at
+ * a fixed text-xs regardless, so the same mark that fitted the sidebar sat
+ * as three tiny letters adrift in the middle of the login screen's box. In a
+ * viewBox every part scales together, so one component is right at every
+ * size without a size prop or a font-size lookup table.
  *
- * WHY NOT onLoad / onError ALONE. The browser starts fetching the logo while
- * the server-rendered HTML is still parsing, so by the time React hydrates the
- * attempt has usually already settled - and a load or error event that has
- * already fired does not fire again. Relying on onError left a broken-image
- * icon in the header for good when the file was missing; relying on onLoad left
- * the initials showing for good when it was present. Both were tried here, and
- * both failed exactly that way. So the element is asked directly on mount:
- * `complete` says the attempt is settled, naturalWidth says whether it settled
- * as a picture. The handlers stay on for an image still in flight at hydration,
- * where they do fire normally.
+ * `textLength` with `lengthAdjust="spacingAndGlyphs"` is what makes two- and
+ * three-letter initials both fill the tile: MP and MPS are set to the same
+ * measured width instead of MPS spilling toward the edges while MP floats in
+ * the middle. Initials longer than three characters are cut - the licence
+ * tool asks for initials, not a name, and the tile is not the place to
+ * discover somebody typed a sentence.
  *
- * A plain <img> rather than next/image: one small fixed-size mark gives the
- * optimiser nothing to do, and next/image fails the build outright when the file
- * is absent - which is exactly the case this has to survive.
- *
- * Decorative throughout: the business name is written next to it every time it
- * is used, so alt is empty and the whole thing is hidden from screen readers.
+ * Decorative throughout: the business name is written next to it every time
+ * it is used, so this is hidden from screen readers.
  */
 export default function BrandMark({ className = 'h-9' }) {
   const { initials } = useBrand();
-  const [shown, setShown] = useState(false);
+  const letters = String(initials || '').trim().slice(0, 3).toUpperCase();
 
   return (
-    <span
+    <svg
+      viewBox="0 0 64 64"
+      role="presentation"
       aria-hidden="true"
-      className={`relative inline-flex shrink-0 items-center justify-center
-                  ${shown ? 'w-auto' : 'aspect-square rounded-lg bg-brand-600'} ${className}`}
+      className={`aspect-square w-auto shrink-0 ${className}`}
     >
-      {shown ? null : <span className="text-xs font-bold text-white">{initials}</span>}
+      <defs>
+        {/*
+         * Ids have to be unique per document, not per component - two marks
+         * render at once on no screen today, but the sidebar has both a
+         * collapsed and an expanded one in the DOM at some widths, and two
+         * identical ids would have the second silently reuse the first's
+         * gradient. Same-value gradients make that invisible until someone
+         * changes one, which is the worst kind of bug to leave lying around.
+         */}
+        <linearGradient id="brandmark-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#10b981" />
+          <stop offset="100%" stopColor="#047857" />
+        </linearGradient>
+        {/* The top highlight - a soft sheen over the upper half, which is what
+            stops the tile reading as a flat placeholder box. */}
+        <linearGradient id="brandmark-sheen" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.28" />
+          <stop offset="60%" stopColor="#ffffff" stopOpacity="0" />
+        </linearGradient>
+      </defs>
 
-      <img
-        // Settled before hydration - the common case - so ask rather than wait.
-        ref={(node) => {
-          if (node?.complete) setShown(node.naturalWidth > 0);
-        }}
-        // Still loading at hydration; these fire normally.
-        onLoad={(event) => setShown(event.currentTarget.naturalWidth > 0)}
-        onError={() => setShown(false)}
-        src={LOGO_SRC}
-        alt=""
-        // Full height, natural width. Hidden until it is known to be a real
-        // picture, so a broken file never shows as a broken icon.
-        className={`h-full w-auto object-contain ${
-          shown ? 'opacity-100' : 'absolute inset-0 h-full w-full opacity-0'
-        }`}
+      <rect width="64" height="64" rx="15" fill="url(#brandmark-fill)" />
+      <rect width="64" height="64" rx="15" fill="url(#brandmark-sheen)" />
+      {/* Hairline inset, drawn just inside the edge so the mark keeps a crisp
+          border against both the white sidebar and the tinted login card. */}
+      <rect
+        x="0.75"
+        y="0.75"
+        width="62.5"
+        height="62.5"
+        rx="14.25"
+        fill="none"
+        stroke="#ffffff"
+        strokeOpacity="0.22"
+        strokeWidth="1.5"
       />
-    </span>
+
+      <text
+        x="32"
+        y="33"
+        textAnchor="middle"
+        dominantBaseline="central"
+        textLength={letters.length > 2 ? 42 : 34}
+        lengthAdjust="spacingAndGlyphs"
+        fill="#ffffff"
+        fontSize="27"
+        fontWeight="700"
+        fontFamily="inherit"
+        // Optical centring: cap-height letters sit slightly high of a true
+        // middle, so the baseline is nudged down a hair rather than left
+        // where dominant-baseline alone puts it.
+        style={{ letterSpacing: '0.01em' }}
+      >
+        {letters}
+      </text>
+    </svg>
   );
 }

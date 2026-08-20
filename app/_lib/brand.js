@@ -16,12 +16,17 @@
  */
 export const BUSINESS_NAME = 'Pump Manager';
 
-/** Shown when the logo file is missing, so the header is never empty. */
+/** The neutral mark, shown before activation and in a plain `npm run dev`. */
 export const BUSINESS_INITIALS = 'PM';
 
-/**
- * Where the logo lives. Anything Next serves from /public works - drop a file
- * in as public/logo.png and it appears; take it away and the initials come
- * back. No code change either way.
+/*
+ * THERE IS NO LOGO_SRC ANY MORE. It pointed at public/logo.png, and whatever
+ * file sat there shipped inside the installer to every client alike - so an
+ * install licensed to one business wore another's logo, the same bug that
+ * BUSINESS_NAME above was moved into the licence to fix. The mark is now
+ * drawn from the licensed initials instead (BrandMark.js), which are per
+ * install and need no file. Putting a single image back would bring the
+ * original bug back with it; a genuinely per-client logo would have to
+ * travel in the licence token or sit in the app data folder, not in the
+ * build.
  */
-export const LOGO_SRC = '/logo.png';
