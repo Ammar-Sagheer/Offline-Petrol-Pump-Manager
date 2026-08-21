@@ -59,9 +59,33 @@ export async function getNozzles() {
               jsonb_build_object('id', t.id, 'name', t.name, 'fuel_type', t.fuel_type) as tank
          from nozzles n
          join tanks t on t.id = n.tank_id
+        where n.is_active
         order by n.unit_number, n.nozzle_label`,
       [],
       'the nozzles',
+    ),
+  );
+}
+
+/**
+ * Retired nozzles - removed from the wiring editor and the daily reading
+ * sheet (get_reading_sheet already excludes them, 008), but not gone: every
+ * reading one ever recorded still counts, so the owner needs to be able to
+ * see what is hidden, same as get_retired_customers.
+ */
+export async function getRetiredNozzles() {
+  return withDb((client) =>
+    rows(
+      client,
+      `select n.*,
+              jsonb_build_object('id', t.id, 'name', t.name, 'fuel_type', t.fuel_type) as tank,
+              (select count(*) from nozzle_readings nr where nr.nozzle_id = n.id) as reading_count
+         from nozzles n
+         join tanks t on t.id = n.tank_id
+        where not n.is_active
+        order by n.unit_number, n.nozzle_label`,
+      [],
+      'the retired nozzles',
     ),
   );
 }

@@ -57,7 +57,7 @@ export default function FullResetPanel() {
             ledger, customers, deliveries, stock checks, expenses and fuel rates.
           </p>
           <p className="rounded-lg border border-ink-200 bg-ink-50 px-3 py-2 text-xs text-ink-600">
-            Kept: the logins, the two tanks and their capacities, and the six nozzles with their
+            Kept: the logins, the two tanks and their capacities, and the nozzles with their
             starting meter readings.
           </p>
 

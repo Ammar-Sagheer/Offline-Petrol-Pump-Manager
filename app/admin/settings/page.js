@@ -5,7 +5,13 @@ import {
   formatRate,
   fullResetAllowed,
 } from '@/app/_lib/helpers';
-import { getTanks, getNozzles, getRecentFuelPrices, getCurrentRates } from '@/app/_lib/data-service';
+import {
+  getTanks,
+  getNozzles,
+  getRetiredNozzles,
+  getRecentFuelPrices,
+  getCurrentRates,
+} from '@/app/_lib/data-service';
 import { storedLicence, isRestricted } from '@/app/_lib/licence';
 import PageHeader from '@/app/_components/ui/PageHeader';
 import FuelBadge from '@/app/_components/ui/FuelBadge';
@@ -30,9 +36,10 @@ const RECENT_ROWS = 5;
 export default async function SettingsPage() {
   await requirePageRole(ROLES.SUPER_ADMIN);
 
-  const [tanks, nozzles, prices, rates] = await Promise.all([
+  const [tanks, nozzles, retiredNozzles, prices, rates] = await Promise.all([
     getTanks(),
     getNozzles(),
+    getRetiredNozzles(),
     getRecentFuelPrices(RECENT_ROWS),
     getCurrentRates(),
   ]);
@@ -46,7 +53,7 @@ export default async function SettingsPage() {
         {/* Set up once and rarely touched again, same reasoning as adding a
             bank account: it does not deserve a form standing open on the page
             for the rest of this screen's life. */}
-        <NozzleSettingsButton nozzles={nozzles} tanks={tanks} />
+        <NozzleSettingsButton nozzles={nozzles} tanks={tanks} retiredNozzles={retiredNozzles} />
       </PageHeader>
 
       {/* ---- pricing ---- */}

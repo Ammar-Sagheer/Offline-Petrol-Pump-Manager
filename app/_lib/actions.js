@@ -99,6 +99,9 @@ function describe(error, fallback) {
   if (constraint === 'lubricant_sales_credit_needs_customer') {
     return 'Choose the customer this was given to on credit.';
   }
+  if (constraint === 'nozzles_unit_number_nozzle_label_key') {
+    return 'A nozzle with that unit and label already exists. Pick a different combination.';
+  }
   if (message.includes('append-only')) {
     return 'The ledger cannot be edited. Post a new offsetting entry instead.';
   }
@@ -1704,6 +1707,127 @@ export async function setNozzleWiring(_prevState, formData) {
 
   const count = Number(saved ?? rows.length);
   return ok(`Saved. ${count} ${count === 1 ? 'nozzle' : 'nozzles'} updated.`);
+}
+
+/**
+ * A new nozzle - a real pump's unit/nozzle layout varies, and the seeded 2
+ * diesel + 4 petrol set (005) is only ever a starting point. Plain insert,
+ * same reasoning as createBankAccount: one new row is not a job that needs an
+ * RPC of its own, and RLS ("nozzles: super admin writes", 004) already
+ * restricts the write to the owner.
+ */
+export async function addNozzle(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const tankId = text(formData, 'tank_id');
+  const unitNumber = number(formData, 'unit_number');
+  const nozzleLabel = text(formData, 'nozzle_label');
+  const startingReading = number(formData, 'starting_reading') ?? 0;
+
+  if (!tankId) return fail('Choose which tank this nozzle draws from.');
+  if (!Number.isInteger(unitNumber) || unitNumber <= 0) {
+    return fail('Enter the unit number as a whole number, greater than 0.');
+  }
+  if (!nozzleLabel) return fail('Give the nozzle a label, e.g. A or B.');
+  if (!Number.isFinite(startingReading) || startingReading < 0) {
+    return fail('Enter the starting meter reading, 0 or more.');
+  }
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query(
+        `insert into nozzles (tank_id, unit_number, nozzle_label, starting_reading)
+         values ($1, $2, $3, $4)`,
+        [tankId, unitNumber, nozzleLabel, roundMoney(startingReading)],
+      ),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not add the nozzle.'));
+  }
+
+  revalidatePath('/admin/settings');
+  revalidatePath('/admin/readings');
+  revalidatePath('/admin');
+  return ok(`Unit ${unitNumber} nozzle ${nozzleLabel} added.`);
+}
+
+/**
+ * Removing a nozzle added by mistake - or retiring one that has been used, if
+ * it turns out to have history. Which one happens is decided in
+ * delete_nozzle() (031), not here: a nozzle with any reading against it
+ * cannot be deleted outright (nozzle_readings.nozzle_id is ON DELETE
+ * RESTRICT, 001), the same money-history rule as delete_customer.
+ *
+ * Requires the acting owner's own password, re-checked in SQL - the same
+ * treatment deleteStaffAccount gives a login, for the same reason: this is
+ * not a toggle a screen left open should be able to trigger by itself.
+ */
+export async function deleteNozzle(_prevState, formData) {
+  const actor = await requireRoleOrFail(ROLES.SUPER_ADMIN);
+  if (actor.error) return actor.error;
+
+  const nozzleId = text(formData, 'nozzle_id');
+  const ownerPassword = String(formData.get('owner_password') ?? '');
+
+  if (!nozzleId) return fail('Missing the nozzle.');
+  if (!ownerPassword) return fail('Enter your own password to confirm.');
+
+  let result;
+  try {
+    result = await withUser(actor.profile.id, async (client) => {
+      const { rows } = await client.query('select delete_nozzle($1, $2) as result', [
+        nozzleId,
+        ownerPassword,
+      ]);
+      return rows[0].result;
+    });
+  } catch (error) {
+    return fail(describe(error, 'Could not remove the nozzle.'));
+  }
+
+  revalidatePath('/admin/settings');
+  revalidatePath('/admin/readings');
+  revalidatePath('/admin');
+
+  const label = `Unit ${result.unit_number} nozzle ${result.nozzle_label}`;
+  return result.removed
+    ? ok(`${label} deleted - it had never recorded a reading.`)
+    : ok(
+        `${label} retired - it has ${result.readings} reading${result.readings === 1 ? '' : 's'} on file, so those stay on the books. It is off the reading sheet from now on.`,
+      );
+}
+
+/** Puts a retired nozzle back into service. See RestoreCustomerButton for the identical shape. */
+export async function setNozzleActive(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const nozzleId = text(formData, 'nozzle_id');
+  const isActive = text(formData, 'is_active') === 'true';
+
+  if (!nozzleId) return fail('Missing the nozzle.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query('update nozzles set is_active = $2 where id = $1', [nozzleId, isActive]),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not update the nozzle.'));
+  }
+
+  revalidatePath('/admin/settings');
+  revalidatePath('/admin/readings');
+  revalidatePath('/admin');
+  return ok(isActive ? 'Back on the reading sheet.' : 'Retired.');
 }
 
 export async function createExpense(_prevState, formData) {
