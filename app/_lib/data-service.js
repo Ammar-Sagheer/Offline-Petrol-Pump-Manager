@@ -914,3 +914,53 @@ export async function getCompanyAssetsSummary() {
     );
   });
 }
+
+// ---------------------------------------------------------------------------
+// Treasury
+//
+// The cash in the safe on the pump site - the owner's "Tajori" sheet. Owner
+// only; the RLS policy on treasury_entries refuses a data_entry caller
+// outright. See migration 032.
+// ---------------------------------------------------------------------------
+
+/**
+ * The balance, the lifetime totals, and the day-by-day series behind the
+ * chart, in one call.
+ *
+ * Straight through to the RPC rather than summed here, so the figure in the
+ * tile, the point the chart ends on and the balance on the last row of the
+ * table are all the same arithmetic done once. `days` only moves the window
+ * figures - the balance is the balance.
+ */
+export async function getTreasuryOverview(days = 30) {
+  return withDb(async (client) => {
+    const result = await one(
+      client,
+      'select treasury_overview($1) as overview',
+      [days],
+      'the treasury summary',
+    );
+    return result?.overview ?? null;
+  });
+}
+
+/**
+ * One day of the safe's sheet: its entries with running balances, the day's
+ * own opening and closing, and which days sit either side of it.
+ *
+ * The unit of a page here is a DAY rather than a row count - see migration
+ * 034. `date` may be anything, including a day with no entries; the RPC
+ * resolves it to the nearest day that has some, so this never returns a page
+ * with nothing on it. Pass null for the most recent day.
+ */
+export async function getTreasuryDay(date = null) {
+  return withDb(async (client) => {
+    const result = await one(
+      client,
+      'select treasury_day($1) as day',
+      [date],
+      'the treasury day',
+    );
+    return result?.day ?? null;
+  });
+}

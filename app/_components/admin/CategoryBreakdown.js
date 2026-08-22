@@ -31,10 +31,16 @@ import { formatPKR } from '@/app/_lib/helpers';
  * browser bundle. Importing MUI's own client component from a server one is
  * fine; only the props have to serialise, and these are an array and a number.
  */
-export default function CategoryBreakdown({ rows, total }) {
+/*
+ * `title` is optional and defaults to what Expenses has always said, so that
+ * page is untouched. Treasury renders two of these side by side - where the
+ * cash came from and where it went - and "Where it went" on both would be
+ * wrong on one of them.
+ */
+export default function CategoryBreakdown({ rows, total, title = 'Where it went' }) {
   return (
     <div className="card mb-4 p-4">
-      <h2 className="mb-3 text-base font-bold text-ink-900">Where it went</h2>
+      <h2 className="mb-3 text-base font-bold text-ink-900">{title}</h2>
 
       <ul className="space-y-3">
         {rows.map(([category, amount]) => {

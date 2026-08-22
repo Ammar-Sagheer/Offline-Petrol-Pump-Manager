@@ -78,6 +78,12 @@ const ACCENT_COLORS = {
   inventory: 'text-teal-600',
   lubricants: 'text-teal-600',
   assets: 'text-teal-600',
+  // Cash in the safe is a thing the pump HOLDS, in the same sense fuel in a
+  // tank is - a quantity sitting in a container on site, counted rather than
+  // received. Not brand green: green here means money ARRIVING, and the safe's
+  // balance is a level, not a movement. The two movement tiles beside it do
+  // use moneyIn / moneyOut and get green and amber, which is the distinction.
+  treasury: 'text-teal-600',
   // The record-keeping: what was read, what was banked, which day.
   readings: 'text-violet-600',
   banking: 'text-violet-600',

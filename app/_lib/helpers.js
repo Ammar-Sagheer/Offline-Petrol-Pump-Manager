@@ -33,6 +33,10 @@ export const ROUTE_ACCESS = {
   '/admin/customers': [ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY],
   // The owner's own bank money, not pump operations.
   '/admin/banking': [ROLES.SUPER_ADMIN],
+  // The cash in the safe on site - the owner's own money too, and the one
+  // page where a figure and a drawer full of notes are checked against each
+  // other. Owner only for the same reason banking is.
+  '/admin/treasury': [ROLES.SUPER_ADMIN],
   '/admin/expenses': [ROLES.SUPER_ADMIN],
   // The owner's own property, not pump operations - same reasoning as banking.
   '/admin/company-assets': [ROLES.SUPER_ADMIN],

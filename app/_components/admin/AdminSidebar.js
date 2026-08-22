@@ -71,6 +71,13 @@ const LINKS = [
     roles: ['super_admin', 'data_entry'],
   },
   { href: '/admin/banking', label: 'Banking', icon: 'banking', roles: ['super_admin'] },
+  // Directly under Banking, because the two are the same question asked of two
+  // different places money sits - what is in the account, what is in the safe -
+  // and the owner moves between them in one sitting when he banks the day's
+  // cash. Its own entry rather than a tab on Banking: none of this money is in
+  // the banking system, and burying it inside the page about accounts is how
+  // it would get read as one.
+  { href: '/admin/treasury', label: 'Treasury', icon: 'treasury', roles: ['super_admin'] },
   { href: '/admin/expenses', label: 'Expenses', icon: 'expenses', roles: ['super_admin'] },
   // Property the pump has bought and kept, not spending or takings - its own
   // entry beside Expenses and Banking rather than a tab on either, because it
@@ -86,7 +93,7 @@ const LINKS = [
   // Offline-only. Copying the data folder is this build's substitute for the
   // Supabase dashboard nobody has here, so it needs somewhere to live in the
   // nav - owner only, same as Settings.
-  { href: '/admin/backup', label: 'Backup', icon: 'settings', roles: ['super_admin'] },
+  { href: '/admin/backup', label: 'Backup', icon: 'backup', roles: ['super_admin'] },
   // Last, and open to both roles - the person most likely to need it is a new
   // member of staff on their first evening, not the owner.
   //

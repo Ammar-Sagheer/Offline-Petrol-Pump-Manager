@@ -36,8 +36,10 @@ import {
   formatRate,
   shiftISODate,
   formatDate,
+  todayISO,
 } from './helpers';
 import { ASSET_CATEGORIES } from './asset-categories';
+import { TREASURY_IN_CATEGORIES, TREASURY_OUT_CATEGORIES } from './treasury-categories';
 
 // ---------------------------------------------------------------------------
 // Small input helpers
@@ -101,6 +103,16 @@ function describe(error, fallback) {
   }
   if (constraint === 'nozzles_unit_number_nozzle_label_key') {
     return 'A nozzle with that unit and label already exists. Pick a different combination.';
+  }
+  // The treasury's two constraint names. Its balance rule (treasury_never_negative)
+  // raises its own sentence and needs no entry here - only these two surface as
+  // raw Postgres text, because a unique index and a check constraint have no
+  // voice of their own.
+  if (message.includes('treasury_entries_one_opening')) {
+    return 'The safe already has an opening amount recorded, and it can only have one. If this is cash arriving, record it as an Entry instead.';
+  }
+  if (message.includes('treasury_entries_category_fits_direction')) {
+    return 'That reason does not belong to that direction — money in and money out have their own lists. Pick the direction first, then the reason.';
   }
   if (message.includes('append-only')) {
     return 'The ledger cannot be edited. Post a new offsetting entry instead.';
@@ -2511,4 +2523,108 @@ export async function deleteReplacedSnapshot(_prevState, _formData) {
 
   revalidatePath('/admin/backup');
   return ok('Deleted.');
+}
+
+// ---------------------------------------------------------------------------
+// Treasury - super_admin only
+//
+// Cash into and out of the safe on site. Standalone: nothing here touches
+// banking, expenses or the customer ledger, even where an entry describes
+// money that also appears in one of them. See migration 032.
+// ---------------------------------------------------------------------------
+
+// Derived from the shared lists rather than typed out again, for the reason
+// ASSET_CATEGORIES's own values list exists: a second, forgotten copy of the
+// same words is how a category added in one place gets silently refused in
+// another.
+const TREASURY_CATEGORY_VALUES = {
+  in: TREASURY_IN_CATEGORIES.map((category) => category.value),
+  out: TREASURY_OUT_CATEGORIES.map((category) => category.value),
+};
+
+export async function createTreasuryEntry(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const direction = text(formData, 'direction');
+  const amount = number(formData, 'amount');
+  const entryDate = text(formData, 'entry_date');
+  const category = text(formData, 'category');
+  const details = text(formData, 'details');
+
+  if (direction !== 'in' && direction !== 'out') {
+    return fail('Say whether cash came in or went out.');
+  }
+  if (amount === null || amount <= 0) return fail('Enter an amount above zero.');
+  if (!entryDate) return fail('Enter the date.');
+  if (!TREASURY_CATEGORY_VALUES[direction].includes(category)) {
+    return fail('Choose what this was for.');
+  }
+
+  /*
+   * A courtesy check, not a rule - the database allows a future date and
+   * should, because nothing about a future date is dishonest. What it catches
+   * is the typo that matters: 2027 for 2026 parks an entry at the bottom of
+   * the sheet for a year, where the running balance still adds up and nobody
+   * looks. One day of slack, because the pump's day and the tablet's clock can
+   * disagree by a few hours.
+   */
+  if (entryDate > shiftISODate(todayISO(), 1)) {
+    return fail(`That date is in the future. Today is ${formatDate(todayISO())}.`);
+  }
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query(
+        `insert into treasury_entries (entry_date, direction, amount, category, details, created_by)
+         values ($1, $2, $3, $4, $5, $6)`,
+        [entryDate, direction, roundMoney(amount), category, details || null, profile.id],
+      ),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not record the entry.'));
+  }
+
+  revalidatePath('/admin/treasury');
+  return ok(
+    direction === 'in'
+      ? `${formatPKR(amount)} recorded into the safe.`
+      : `${formatPKR(amount)} recorded out of the safe.`,
+  );
+}
+
+/**
+ * Removes one entry.
+ *
+ * Nothing special happens here, and that is worth saying: the running balance
+ * is not stored anywhere, so removing a row simply takes it out of the chain
+ * and every balance after it moves. If that would drop the safe below zero at
+ * any point, the database refuses the delete and says which line it broke on
+ * (treasury_never_negative, migration 032).
+ */
+export async function deleteTreasuryEntry(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const entryId = text(formData, 'entry_id');
+  if (!entryId) return fail('Missing the entry.');
+
+  try {
+    await withUser(profile.id, (client) =>
+      client.query('delete from treasury_entries where id = $1', [entryId]),
+    );
+  } catch (error) {
+    return fail(describe(error, 'Could not remove the entry.'));
+  }
+
+  revalidatePath('/admin/treasury');
+  return ok('Entry removed.');
 }

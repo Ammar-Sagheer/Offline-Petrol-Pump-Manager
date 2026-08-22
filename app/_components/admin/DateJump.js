@@ -20,6 +20,13 @@ import Button from '@/app/_components/ui/Button';
  * navigating on every change would jump the page to the year 6 mid-keystroke
  * and take the half-typed date with it. Only a plausible, complete date moves.
  *
+ * `scroll` defaults to TRUE, which is the behaviour every caller had before it
+ * existed and is right where picking a day changes the whole page - Readings,
+ * the Dashboard. Pass `scroll={false}` where the box sits at the BOTTOM of a
+ * page and only the block above it changes, as on Treasury: there, jumping to
+ * a day and being thrown to the top means scrolling back down to the thing you
+ * asked for. Same rule as `<TrendRange>`, which reached it first.
+ *
  * The form around it is still a real GET form, so the noscript button below
  * keeps this usable with JavaScript switched off. Note that is not the same as
  * "before the page has hydrated" - in that window picking a date does nothing
@@ -33,7 +40,13 @@ function isNavigable(value) {
   return year >= 2000 && year <= 2100;
 }
 
-export default function DateJump({ date, basePath, paramName = 'date', extraParams }) {
+export default function DateJump({
+  date,
+  basePath,
+  paramName = 'date',
+  extraParams,
+  scroll = true,
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -72,7 +85,9 @@ export default function DateJump({ date, basePath, paramName = 'date', extraPara
           const next = event.target.value;
           if (!isNavigable(next) || next === date) return;
           startTransition(() => {
-            router.push(`${basePath}?${paramName}=${next}${carried ? `&${carried}` : ''}`);
+            router.push(`${basePath}?${paramName}=${next}${carried ? `&${carried}` : ''}`, {
+              scroll,
+            });
           });
         }}
         className="input py-2"

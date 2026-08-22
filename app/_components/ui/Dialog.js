@@ -74,8 +74,26 @@ export default function Dialog({ open, onClose, title, subtitle, size = 'md', ch
                      : 'sm:w-[min(32rem,calc(100vw-2rem))]'
                  }`}
     >
+      {/*
+       * `whitespace-normal text-left` IS A RESET, AND IT IS LOAD-BEARING.
+       *
+       * A <dialog> opened with showModal() is painted in the browser's top
+       * layer, so nothing about where it sits in the DOM constrains its
+       * position or its size - which is easy to read as "nothing about where
+       * it sits affects it at all". Inherited properties still come down the
+       * DOM ancestry as usual, and a delete-confirmation dialog rendered from
+       * inside a right-aligned, non-wrapping money cell (a `.td-num`) inherits
+       * both: its explaining sentence renders right-aligned and, unable to
+       * wrap, runs off the side of the panel and puts a horizontal scrollbar
+       * inside the dialog - so the sentence saying what deleting would do is
+       * half off screen.
+       *
+       * Fixed here rather than at each call site, because it is the panel
+       * that is wrong: a modal's own typography should not depend on which
+       * cell opened it.
+       */}
       <div
-        className="flex h-dvh w-full flex-col bg-white
+        className="flex h-dvh w-full flex-col whitespace-normal bg-white text-left
                    sm:h-auto sm:max-h-[90dvh] sm:rounded-xl sm:shadow-2xl"
       >
         <header className="flex items-start justify-between gap-3 border-b border-ink-200 px-4 py-3">
