@@ -174,6 +174,7 @@ export default async function RegisterPage({ searchParams }) {
   );
 
   const profit = Number(summary.profit ?? 0);
+  const costOfStockSold = Number(summary.cost_of_goods_sold ?? 0);
   const totalSales = Number(summary.total_sales ?? 0);
   const totalStockCost = Number(summary.total_stock_cost ?? 0);
   const expenses = Number(summary.expenses_total ?? 0);
@@ -186,10 +187,39 @@ export default async function RegisterPage({ searchParams }) {
    * them. Days with nothing are zero, which is what actually happened.
    */
   const dayKeys = salesTrend.map((row) => row.day);
-  const seriesSales = salesTrend.map((row) => Number(row.sale_amount ?? 0));
+  // Both trades, because the headline Sales figure counts both - and because
+  // the daily split below has to add up to the headline profit exactly.
+  const seriesSales = salesTrend.map(
+    (row) => Number(row.sale_amount ?? 0) + Number(row.lubricant_amount ?? 0),
+  );
   const seriesStock = dayKeys.map((day) => Number(purchaseDays[day] ?? 0));
   const seriesExpenses = dayKeys.map((day) => Number(expenseDays[day] ?? 0));
-  const seriesProfit = dayKeys.map((_, i) => seriesSales[i] - seriesStock[i] - seriesExpenses[i]);
+
+  /*
+   * THE DAILY PROFIT LINE SPREADS THE COST OF STOCK SOLD ACROSS THE DAYS BY
+   * LITRES, and it used to subtract stock BOUGHT on the day instead.
+   *
+   * That was the same bug the headline had (migration 035), and left alone it
+   * would now be worse than before: the tile above says one thing and the
+   * shape under it says another. A delivery day would still plunge to a deep
+   * loss on a line sitting beneath a profit figure that no longer counts
+   * deliveries at all.
+   *
+   * Litres is the right key to spread on: the cost of a litre is roughly
+   * constant across a short run of days, so a day that sold twice as much fuel
+   * consumed twice as much stock. And the split is EXACT at the total - every
+   * day's litres add up to the period's litres, so every day's cost adds up to
+   * the period's cost of goods sold, and the daily profits add up to the
+   * profit on the tile. Within the period it is an apportionment, not a
+   * measurement, which is the right standing for a sparkline: a shape, not a
+   * figure to read.
+   */
+  const seriesLitres = salesTrend.map((row) => Number(row.litres_sold ?? 0));
+  const litresInPeriod = seriesLitres.reduce((sum, litres) => sum + litres, 0);
+  const costPerLitre = litresInPeriod > 0 ? costOfStockSold / litresInPeriod : 0;
+  const seriesProfit = dayKeys.map(
+    (_, i) => seriesSales[i] - seriesLitres[i] * costPerLitre - seriesExpenses[i],
+  );
 
   const tips = (series) =>
     dayKeys.map((day, i) => ({ v: formatPKR(series[i]), d: formatDate(day) }));
@@ -291,15 +321,16 @@ export default async function RegisterPage({ searchParams }) {
             </div>
           </div>
 
-          {/* The warning is louder here than on Reports, and deliberately so.
-              Over a whole month a delivery lands somewhere in the middle and
-              mostly averages out. Over four days one delivery IS the month -
-              it can turn a good run of days into a loss on this tile with
-              nothing wrong at all. */}
+          {/* This used to warn that a single delivery could turn a good run of
+              days into a loss here. It no longer can - profit counts the stock
+              sold, so a delivery lands in closing stock rather than in the
+              figure. What is worth saying instead is where the cost came from,
+              because over a short run it is apportioned rather than measured. */}
           <p className="mt-3 text-sm text-ink-600">
-            Profit counts stock <span className="font-semibold">bought</span> in these days, not
-            stock sold. Over a short run of days one delivery can swing this figure a long way — the
-            register above is where the fuel itself is accounted for.
+            Profit counts the stock <span className="font-semibold">sold</span> over these days —
+            a delivery still in the tank is not charged against them. The cost is spread across
+            the days by litres sold, so each day&rsquo;s figure is a share rather than a
+            measurement; the total is exact.
           </p>
 
           {/* ---- the register itself ---- */}

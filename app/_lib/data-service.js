@@ -612,7 +612,8 @@ export async function getStockRegister(from, to) {
 }
 
 /**
- * Sales, stock bought, expenses and profit over an arbitrary run of days.
+ * Sales, stock bought, the cost of stock sold, expenses and profit over an
+ * arbitrary run of days.
  *
  * getMonthlyReport answers the same question for a whole calendar month and
  * cannot answer it for any other span - it takes a year and a month, not two

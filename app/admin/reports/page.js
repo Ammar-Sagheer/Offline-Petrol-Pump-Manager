@@ -63,6 +63,16 @@ export default async function ReportsPage({ searchParams }) {
   // under them are where each trade is shown on its own.
   const totalSales = Number(report.total_sales ?? 0);
   const totalStockCost = Number(report.total_stock_cost ?? 0);
+
+  /*
+   * The three figures profit is now actually made of (migration 035). Profit
+   * subtracts the cost of stock SOLD, which is opening stock + what was bought
+   * - closing stock, so a delivery that is still in the tank on the last of the
+   * month is no longer charged against the month that bought it.
+   */
+  const costOfStockSold = Number(report.cost_of_goods_sold ?? 0);
+  const openingStock = Number(report.opening_stock_value ?? 0);
+  const closingStock = Number(report.closing_stock_value ?? 0);
   const totalCash = Number(sales.cash_amount ?? 0) + Number(lubricantSales.cash_amount ?? 0);
   const totalCredit = Number(sales.credit_amount ?? 0) + Number(lubricantSales.credit_amount ?? 0);
   const totalPending =
@@ -161,21 +171,38 @@ export default async function ReportsPage({ searchParams }) {
           label="Profit"
           value={formatPKR(profit)}
           tone={profit >= 0 ? 'positive' : 'negative'}
-          sub="sales − stock bought − expenses"
+          sub="sales − cost of stock sold − expenses"
         />
       </StatGrid>
 
-      {/* One line, not four. This was a paragraph explaining that profit counts
-          stock bought rather than stock sold, why a late delivery flatters it
-          downwards, and that both trades are included - true, all of it, and
-          the owner's verdict was "too long". The first clause is the only part
-          that changes how a figure is read; "both trades" was already covered
-          by the Sales tile's own sub-line, which itemises fuel and lubricants.
-          The full reasoning lives in the Guide and on the Summary sheet of the
-          workbook, where there is room for it. */}
-      <p className="mt-3 text-sm text-ink-600">
-        Profit counts stock <span className="font-semibold">bought</span> this month, not stock
-        sold — so a big delivery near month end makes it look low.
+      {/* THE WORKING, NOT A WARNING. This line used to apologise for the
+          figure - "profit counts stock bought this month, not stock sold, so a
+          big delivery near month end makes it look low" - which was honest
+          about a formula that was wrong. Migration 035 fixed the formula, so
+          what belongs here is how the number was reached.
+
+          It is a sentence rather than four more tiles because it is read once,
+          when someone asks "how did it get to that?", and never again. The
+          figures are in it so the arithmetic can be followed across without
+          hunting for them, and the stock values are the two the owner cannot
+          see anywhere else on the page. */}
+      <p className="mt-3 text-sm leading-relaxed text-ink-600">
+        {/* EVERY FIGURE IS whitespace-nowrap, and every gap around one is an
+            explicit {' '}. Neither is decoration: money breaking across a line
+            (a "Rs" ending one line, the number starting the next) reads as two
+            figures, and JSX can silently drop a plain-whitespace gap next to an
+            element in a way {' '} cannot. */}
+        Profit counts the stock actually <span className="font-semibold">sold</span>:{' '}
+        <span className="whitespace-nowrap">{formatPKR(openingStock)}</span>{' '}
+        in the tanks at the start, plus{' '}
+        <span className="whitespace-nowrap">{formatPKR(totalStockCost)}</span>{' '}
+        bought, less{' '}
+        <span className="whitespace-nowrap">{formatPKR(closingStock)}</span>{' '}
+        still there at the end &mdash;{' '}
+        <span className="whitespace-nowrap font-semibold text-ink-800">
+          {formatPKR(costOfStockSold)}
+        </span>
+        . A delivery sitting in the tank on the last of the month is not charged against it.
       </p>
 
       {/* ---- cash / credit + pending ---- */}
