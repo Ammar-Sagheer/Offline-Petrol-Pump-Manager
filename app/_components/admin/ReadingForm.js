@@ -8,7 +8,7 @@ import FormMessage from '@/app/_components/ui/FormMessage';
 import FuelBadge from '@/app/_components/ui/FuelBadge';
 import NumberInput from '@/app/_components/ui/NumberInput';
 import ReadingChainWarning from '@/app/_components/admin/ReadingChainWarning';
-import { formatRate } from '@/app/_lib/format-helpers';
+import { formatRate, saleAmount as exactSaleAmount } from '@/app/_lib/format-helpers';
 import { shiftISODate, formatDateLong } from '@/app/_lib/date-helpers';
 import Dialog from '@/app/_components/ui/Dialog';
 import Icon from '@/app/_components/ui/Icon';
@@ -457,7 +457,19 @@ function EntryForm({ row, date, customers }) {
   const hasClosing = closingValue !== null && Number.isFinite(closingValue);
 
   const litres = hasClosing ? round2(closingValue - opening) : 0;
-  const saleAmount = round2(litres * rate);
+
+  /*
+   * WHAT THE SCREEN SHOWS HAS TO BE WHAT GETS SAVED. `round2(litres * rate)` is
+   * a floating-point multiplication of the two figures Postgres multiplies in
+   * `numeric`, and on a half-paisa they disagree: 197.75 L at Rs 371.90 is
+   * exactly Rs 73,543.2250, which the database rounds to .23 and a double
+   * rounds to .22. That one paisa used to make the reading unsaveable
+   * (migration 036, reference 052); now that the database derives the cash
+   * itself it cannot, but the cash-in-hand figure the owner checks against the
+   * notes in the drawer would still be a paisa out from the books. Use the
+   * exact one for anything that is money.
+   */
+  const saleAmount = exactSaleAmount(litres, rate);
   const creditTotal = round2(lines.reduce((total, line) => total + (Number(line.amount) || 0), 0));
   const cashAmount = round2(saleAmount - creditTotal);
 

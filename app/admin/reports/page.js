@@ -19,6 +19,8 @@ import CashCreditChart from '@/app/_components/admin/CashCreditChart';
 import FuelBadge from '@/app/_components/ui/FuelBadge';
 import PendingLink from '@/app/_components/ui/PendingLink';
 import Button from '@/app/_components/ui/Button';
+import DownloadNotice from '@/app/_components/ui/DownloadNotice';
+import DailyTableDialog from '@/app/_components/admin/DailyTableDialog';
 
 export const metadata = { title: 'Reports' };
 
@@ -118,10 +120,13 @@ export default async function ReportsPage({ searchParams }) {
         </Button>
       </PageHeader>
 
+      {/* Self-clearing: a download that works does not re-render the page, so
+          a reason left in the query string outlives the problem - this one
+          takes itself out of the URL once it has been read. */}
       {exportError ? (
-        <p className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+        <DownloadNotice param="export_error">
           The Excel download did not work: {exportError}
-        </p>
+        </DownloadNotice>
       ) : null}
 
       {/* ---- monthly headline ---- */}
@@ -386,9 +391,38 @@ export default async function ReportsPage({ searchParams }) {
       </div>
 
       {/* ---- 30 day trend ---- */}
-      <h2 className="section-heading">
-        {formatMonth(year, month)} day by day
-      </h2>
+      {/* The heading and the way out of the charts, on one line. The days as
+          numbers used to be a <details> block UNDER the charts, which put the
+          alternative to a chart below the chart it was an alternative to - so
+          anyone the chart was failing had to scroll past it to find the table.
+          Here the choice is where the reader already is. */}
+      <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-ink-900">{formatMonth(year, month)} day by day</h2>
+
+        <DailyTableDialog
+          label="Show these days as a table"
+          title={`${formatMonth(year, month)} day by day`}
+          subtitle={
+            <span className="text-sm text-ink-600">
+              {formatDate(report.from)} – {formatDate(report.to)}
+            </span>
+          }
+        >
+          {/* Rendered on the server and handed to the dialog as children -
+              DailySalesTable formats through helpers.js, which cannot cross
+              into a client bundle. */}
+          <DailySalesTable rows={trend} />
+
+          <PendingLink
+            href="/admin/reports/daily"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"
+          >
+            See every day, not just this month
+            <Icon name="chevronRight" className="h-4 w-4" />
+          </PendingLink>
+        </DailyTableDialog>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="card p-4">
           <h3 className="mb-3 text-sm font-bold text-ink-900">Daily fuel sales</h3>
@@ -399,28 +433,6 @@ export default async function ReportsPage({ searchParams }) {
           <CashCreditChart data={trend} height={280} />
         </section>
       </div>
-
-      {/* The same days as numbers - for anyone who cannot read the charts, and
-          for checking a specific day without hovering. Still collapsed by
-          default and still scoped to the month on screen; the link goes to the
-          same table paged back over every day the pump has traded. */}
-      <details className="card mt-4 p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-ink-800">
-          Show these days as a table
-        </summary>
-
-        <div className="mt-4">
-          <DailySalesTable rows={trend} />
-        </div>
-
-        <PendingLink
-          href="/admin/reports/daily"
-          className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"
-        >
-          See every day, not just this month
-          <Icon name="chevronRight" className="h-4 w-4" />
-        </PendingLink>
-      </details>
 
     </>
   );

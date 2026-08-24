@@ -238,6 +238,7 @@ export default function AdminSidebar({ profile }) {
         >
           <Icon name={link.icon} className="h-5 w-5" />
           {link.label}
+          {active ? <ActiveMark /> : null}
         </PendingLink>
       </li>
     );
@@ -257,6 +258,7 @@ export default function AdminSidebar({ profile }) {
       >
         <Icon name="account" className="h-5 w-5" />
         Account
+        {isActive('/admin/account') ? <ActiveMark /> : null}
       </PendingLink>
 
       <form action={signOut}>
@@ -347,5 +349,29 @@ export default function AdminSidebar({ profile }) {
         </div>
       </dialog>
     </>
+  );
+}
+
+/**
+ * The dark bar at the right-hand end of whichever section is open.
+ *
+ * The tinted band and the greener label already said "you are here", but both
+ * are soft: on a cheap tablet in daylight the brand-50 fill washes out to the
+ * same white as the rest of the column, and then nothing on the screen says
+ * which of thirteen sections is showing. A short hard line at the end of the
+ * row survives that - it is the darkest thing in the nav, and it is somewhere
+ * no other row has ink at all, so it reads as a marker rather than as one more
+ * pale wash.
+ *
+ * `ml-auto` puts it against the far edge whatever the label's length, so the
+ * markers line up down the column instead of trailing after each word. Purely
+ * decorative: aria-current on the link is what a screen reader is told.
+ */
+function ActiveMark() {
+  return (
+    <span
+      aria-hidden="true"
+      className="ml-auto h-6 w-1 shrink-0 rounded-full bg-brand-800"
+    />
   );
 }

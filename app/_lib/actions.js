@@ -32,6 +32,7 @@ import {
   fullResetAllowed,
   formatLitres,
   formatLitresFine,
+  saleAmount as exactSaleAmount,
   formatPKR,
   formatRate,
   shiftISODate,
@@ -295,7 +296,20 @@ export async function saveReading(_prevState, formData) {
   }
 
   const litresSoldValue = roundMoney(closing - opening);
-  const saleAmount = roundMoney(litresSoldValue * rate);
+
+  /*
+   * EXACT, not `roundMoney(litresSoldValue * rate)`. That was a floating-point
+   * multiplication of the same figures Postgres multiplies in `numeric`, and on
+   * a half-paisa the two disagreed by a paisa - which the balanced-day
+   * constraint refused, on a reading where every figure was correct. See
+   * migration 036 (reference 052) and saleAmount() in format-helpers.js.
+   *
+   * The database no longer believes this number anyway: create_nozzle_reading
+   * derives the cash itself. It is still computed here for the guard below and
+   * for the message, and it has to be the same figure the database will reach
+   * or the sentence would quote a total the books disagree with.
+   */
+  const saleAmount = exactSaleAmount(litresSoldValue, rate);
   const creditTotal = roundMoney(cleanedLines.reduce((total, line) => total + line.amount, 0));
   const cashAmount = roundMoney(saleAmount - creditTotal);
 
@@ -2627,4 +2641,60 @@ export async function deleteTreasuryEntry(_prevState, formData) {
 
   revalidatePath('/admin/treasury');
   return ok('Entry removed.');
+}
+
+// ---------------------------------------------------------------------------
+// Trimming the activity log - super_admin only
+//
+// The log gains a line per change - dozens on a working day - and the part of
+// it anyone ever reads is the recent end. Left alone it becomes hundreds of
+// pages with the useful end buried at the top.
+//
+// The period is all that crosses the wire: how many months to KEEP, one of
+// four. The cutoff date is worked out in the database from pump_today(), so
+// the browser cannot name an instant of its own, and the count the dialog
+// showed and the rows that actually go are computed the same way in the same
+// place - see migration 037.
+//
+// Append-only is not weakened by this. A line still cannot be edited, and a
+// single line cannot be picked out and removed: it is a whole period or
+// nothing, the last month is never on offer, and the trim writes its own line
+// into the log saying who did it and how many went.
+// ---------------------------------------------------------------------------
+export async function clearOldActivity(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const keepMonths = number(formData, 'keep_months');
+  if (![1, 3, 6, 12].includes(keepMonths)) {
+    return fail('Choose how much of the log to keep.');
+  }
+
+  let data;
+  try {
+    data = await withUser(profile.id, async (client) => {
+      const { rows } = await client.query('select clear_activity_log($1) as result', [keepMonths]);
+      return rows[0]?.result;
+    });
+  } catch (error) {
+    return fail(describe(error, 'Could not clear the old entries.'));
+  }
+
+  revalidatePath('/admin/activity');
+
+  const gone = Number(data?.deleted ?? 0);
+  const cutoff = data?.cutoff ? formatDate(data.cutoff) : null;
+
+  if (gone === 0) {
+    return ok(`Nothing to clear — every entry is newer than ${cutoff ?? 'the cutoff'}.`);
+  }
+
+  return ok(
+    `${gone} ${gone === 1 ? 'entry' : 'entries'} cleared` +
+      (cutoff ? ` — everything before ${cutoff} is gone.` : '.'),
+  );
 }

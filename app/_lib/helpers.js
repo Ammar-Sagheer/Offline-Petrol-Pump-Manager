@@ -220,7 +220,7 @@ export {
  * Same arrangement for the formatters the client forms also need - see
  * format-helpers.js.
  */
-export { formatRate, formatLitresFine } from './format-helpers';
+export { formatRate, formatLitresFine, saleAmount } from './format-helpers';
 
 /**
  * Whether the "empty everything" button exists on this build.
@@ -283,10 +283,6 @@ export function roundRupees(value) {
 export function litresSold(opening, closing) {
   const sold = Number(closing) - Number(opening);
   return Number.isFinite(sold) ? roundMoney(sold) : 0;
-}
-
-export function saleAmount(litres, ratePerLitre) {
-  return roundMoney(Number(litres) * Number(ratePerLitre));
 }
 
 /** Positive = the customer owes money. */

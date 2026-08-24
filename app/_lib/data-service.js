@@ -194,6 +194,35 @@ export async function getActivityLog({ page = 1, perPage = 20, who } = {}) {
 }
 
 /**
+ * What clearing the old end of the log would remove, per retention period.
+ *
+ * The dialog cannot honestly offer "clear entries older than six months"
+ * without saying how many that is, and the four counts plus the span of the log
+ * come back in one round trip - see activity_log_trim_counts in migration 037.
+ * The cutoff maths lives in the database so the figure shown and the figure
+ * deleted cannot drift apart.
+ *
+ * Owner only, in the function itself. It returns null rather than throwing if
+ * the log cannot be read, because this feeds a button beside the page: a page
+ * that renders without the button is better than a page that does not render.
+ */
+export async function getActivityTrimCounts() {
+  return withDb(async (client) => {
+    try {
+      const result = await one(
+        client,
+        'select activity_log_trim_counts() as counts',
+        [],
+        'the activity log trim counts',
+      );
+      return result?.counts ?? null;
+    } catch {
+      return null;
+    }
+  });
+}
+
+/**
  * The rate in force for each fuel, as { petrol: 280, diesel: 275 }.
  *
  * The date is always sent explicitly rather than left to the database default,

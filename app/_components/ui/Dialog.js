@@ -14,8 +14,11 @@ import { useEffect, useRef } from 'react';
  * small display.
  *
  * `size="lg"` widens the desktop dialog for content that does not fit the
- * default 32rem without scrolling sideways inside it - a table, mainly. Phones
- * are unaffected either way; the sheet already fills the screen.
+ * default 32rem without scrolling sideways inside it - a table, mainly. `"xl"`
+ * goes wider again, for a table that is wide in its own right: the nine-column
+ * daily-sales one is 46rem at its narrowest, which `lg` fits only by giving up
+ * its own padding. Phones are unaffected by any of them; the sheet already
+ * fills the screen.
  *
  * Deliberately NO click-outside-to-close. Every dialog here holds a form
  * someone is part-way through typing, and a click event fires on the nearest
@@ -69,9 +72,10 @@ export default function Dialog({ open, onClose, title, subtitle, size = 'md', ch
       className={`m-0 max-h-none w-full max-w-none bg-transparent p-0
                  backdrop:bg-ink-900/60 backdrop:backdrop-blur-sm
                  sm:m-auto sm:max-h-[90dvh] ${
-                   size === 'lg'
-                     ? 'sm:w-[min(48rem,calc(100vw-2rem))]'
-                     : 'sm:w-[min(32rem,calc(100vw-2rem))]'
+                   {
+                     xl: 'sm:w-[min(64rem,calc(100vw-2rem))]',
+                     lg: 'sm:w-[min(48rem,calc(100vw-2rem))]',
+                   }[size] ?? 'sm:w-[min(32rem,calc(100vw-2rem))]'
                  }`}
     >
       {/*

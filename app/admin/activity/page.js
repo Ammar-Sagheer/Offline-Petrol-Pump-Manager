@@ -1,10 +1,11 @@
 import { requirePageRole, ROLES } from '@/app/_lib/helpers';
-import { getActivityLog, getProfiles } from '@/app/_lib/data-service';
+import { getActivityLog, getActivityTrimCounts, getProfiles } from '@/app/_lib/data-service';
 import PageHeader from '@/app/_components/ui/PageHeader';
 import EmptyState from '@/app/_components/ui/EmptyState';
 import PendingLink from '@/app/_components/ui/PendingLink';
 import Pager, { pageFrom } from '@/app/_components/ui/Pager';
 import ActivityTable from '@/app/_components/admin/ActivityTable';
+import ClearOldActivityButton from '@/app/_components/admin/ClearOldActivityButton';
 
 export const metadata = { title: 'Activity' };
 
@@ -41,9 +42,10 @@ export default async function ActivityPage({ searchParams }) {
   const page = pageFrom(params);
   const who = typeof params?.who === 'string' ? params.who : null;
 
-  const [{ rows, total }, profiles] = await Promise.all([
+  const [{ rows, total }, profiles, trimCounts] = await Promise.all([
     getActivityLog({ page, perPage: PER_PAGE, who }),
     getProfiles(),
+    getActivityTrimCounts(),
   ]);
 
   /* The filter has to survive turning the page, and the page number has to be
@@ -57,7 +59,14 @@ export default async function ActivityPage({ searchParams }) {
       <PageHeader
         title="Activity"
         description="Who entered, changed or removed what, and when. Written by the database itself, and nobody — including you — can edit it."
-      />
+      >
+        {/* The one thing that may be done TO the log rather than read from it,
+            and the only one: the old end can be thrown away in whole periods.
+            Not shown at all when nothing is old enough for it to mean
+            anything - see ClearOldActivityButton for why that is still
+            append-only. */}
+        {trimCounts ? <ClearOldActivityButton counts={trimCounts} /> : null}
+      </PageHeader>
 
       {/* Only worth drawing with more than one login to choose between. */}
       {profiles.length > 1 ? (

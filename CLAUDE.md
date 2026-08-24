@@ -55,28 +55,43 @@ Closing the app stops both cleanly. Backing up is copying one folder.
 
 ## Where things live (mirrors the reference repo's structure exactly)
 
-- `db/migrations/001-034` - the entire data model. `001-009` is the original
+- `db/migrations/001-037` - the entire data model. `001-009` is the original
   consolidation of the reference repo's first 21 Supabase migrations into
   their final state (not replayed step-by-step - Supabase-specific
   workarounds like the `safeupdate` library dance don't apply here);
   `010` onwards are ported one-for-one as the reference adds them, so
-  `013-024` = reference `024-035`, `025-030` = reference `036/039-043`, and
-  `032-034` = reference `044/046/047` (Treasury). The numbers never line up,
-  and they are not meant to - compare *contents*, never numbers. Each file's
-  header names the reference migration it came from and what had to change.
-  Every trigger, constraint, and the full banking module carried over
-  untouched in logic; only the identity plumbing changed - `auth.uid()`
-  becomes `current_uid()`, `authenticated`/`anon` become `app_user`.
+  `013-024` = reference `024-035`, `025-030` = reference `036/039-043`,
+  `032-034` = reference `044/046/047` (Treasury), and `036-037` = reference
+  `052/050` (the paisa-exact cash fix, then letting the owner trim the old
+  end of the activity log - taken in the order this build needed them, not
+  the reference's chronology). The numbers never line up, and they are not
+  meant to - compare *contents*, never numbers. Each file's header names the
+  reference migration it came from and what had to change. Every trigger,
+  constraint, and the full banking module carried over untouched in logic;
+  only the identity plumbing changed - `auth.uid()` becomes `current_uid()`,
+  `authenticated`/`anon` become `app_user`.
   `031` is offline-only (customizable nozzles - every install used to be
   hard-seeded with the same fixed layout, which doesn't fit every client's
   actual pump), with no reference counterpart, so it breaks the run of
-  correspondences. Also skipped from the reference's Treasury run:
+  correspondences. Also skipped from the reference's Treasury/backup run:
   `045` seeds one specific owner's real 36 cash transactions - private
   history for one client, not a generic starting point, so every install
   starts with an empty treasury instead; `048` repairs a mistake made when
   applying `044` to one specific *live* Supabase database - it never happened
   here, since a fresh embedded Postgres cluster gets `032` applied correctly
-  the first time.
+  the first time; `051` (backup/restore as a JSON download) is not for this
+  build at all - it already backs itself up its own way (copy the data
+  directory, or `pg_dump`), which captures the logins that JSON export
+  deliberately cannot, so its migration, Settings panel, download route and
+  recovery script are all deliberately left behind. See PROGRESS.md's "third
+  catch-up" for the full reasoning on all three skips.
+- **Never compute in JavaScript a money figure the database also computes.**
+  `create_nozzle_reading` derives `cash_amount` in `numeric` (036); the
+  screen has to show that same figure before saving, which is what
+  `saleAmount()` in `format-helpers.js` is for - integer arithmetic matching
+  Postgres's `round()`, never `litres * rate` in floating point. A generated
+  column plus a check constraint is a promise the database and the app
+  agree; a float is a wager that they will.
 - `app/_lib/db.js`, `auth.js` - replace `supabase.js`/`supabase-server.js`/
   `supabase-auth.js`. Connection pooling, session cookies (iron-session),
   the `withUser(userId, fn)` helper every read/write goes through.

@@ -8,7 +8,7 @@ import FormMessage from '@/app/_components/ui/FormMessage';
 import Toast from '@/app/_components/ui/Toast';
 import Dialog from '@/app/_components/ui/Dialog';
 import NumberInput from '@/app/_components/ui/NumberInput';
-import { formatRate } from '@/app/_lib/format-helpers';
+import { formatRate, saleAmount as exactSaleAmount } from '@/app/_lib/format-helpers';
 import Button from '@/app/_components/ui/Button';
 
 /*
@@ -103,7 +103,11 @@ export default function LubricantSaleForm({ lubricants, customers, date, dateLab
     if (amountTouched) return;
     const rate = Number(selected?.sale_rate_per_litre);
     if (!selected || !Number.isFinite(rate) || rate <= 0 || !hasLitres) return;
-    setAmount(String(round2(litresTyped * rate)));
+    // Exact, for the same reason readings are - see format-helpers.js. This
+    // one was never refused (the constraint compares the split against this
+    // very figure, so both sides shared the error), but it could store an
+    // amount a paisa away from what litres x rate actually comes to.
+    setAmount(String(exactSaleAmount(litresTyped, rate)));
   }, [selected, litresTyped, hasLitres, amountTouched]);
 
   const credit =

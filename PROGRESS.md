@@ -239,6 +239,151 @@ plain `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`SESSION_SECRET` env vars -
 connect as `app_user`, not `postgres`, or RLS is bypassed and the screens
 lie to you.
 
+## The third catch-up: reference `98712fd` -> `3d696ea`
+
+The gap this time was smaller and mostly already closed by the time this
+round started: a prior session (same owner, different Claude session) had
+already ported the customizable-nozzle feature (offline-only, no reference
+counterpart) and reference migrations 044/046/047/049 - Treasury, its two
+follow-up fixes, and profit counting stock sold rather than stock bought -
+landing as offline `031-035`. That earlier session's own read of the
+reference's porting notes (`docs/CHANGELOG.md` -> "Porting the Treasury ->
+Backup rounds to the offline (Electron) build", written by the reference repo
+itself for exactly this build) had already ruled out `045` (one specific
+owner's real 36 cash movements - private history, not a generic starting
+point) and `048` (a repair for a mistake made applying `044` to one specific
+*live* Supabase database, which never happened here since a fresh cluster
+applies `032` correctly the first time).
+
+This round picked up from there: reference `050` and `052`, plus the UI
+polish that came with the round (`docs/CHANGELOG.md`'s own list again -
+`ActiveMark`, `Dialog`'s `xl` size, `DailyTableDialog`, `DownloadNotice`).
+**`051` (backup/restore) was skipped on the owner's explicit instruction this
+time too** - the offline build backs itself up its own way (copy the data
+directory, or `pg_dump`), which already captures the logins the reference's
+JSON export deliberately cannot, so porting `export_everything()`,
+`restore_everything()`, the Settings backup panel or the download route would
+be shipping a second backup system nobody asked for. Same conclusion the
+earlier session reached independently, and the reference's own docs commit
+("d3a8630 Docs: the desktop build does not take the backup feature") agrees.
+
+### Database: reference `050`/`052` -> `db/migrations/036-037`
+
+| offline | reference | what |
+| --- | --- | --- |
+| 036 | 052 | **the database works out the cash** - `create_nozzle_reading` now derives `cash_amount` from `numeric` arithmetic instead of trusting what the browser computed in floating point |
+| 037 | 050 | letting the owner clear the OLD end of the activity log, in whole retention periods only |
+
+Both migrations are close to verbatim - the usual `authenticated` -> `app_user`
+swap and no `anon` role to revoke from, nothing touching identity beyond that.
+
+**036 fixes a real, already-reproduced bug.** A reading whose litres × rate
+lands exactly on a half-paisa disagreed between Postgres (`numeric`, exact,
+rounds .225 up to .23) and the browser (a binary double, computes
+73543.224999999991, rounds down to .22) - and the balanced-day constraint
+refused the row over that one paisa, on a reading where every figure was
+correct. Fixed the same way the credit total already was, years earlier:
+derive it in the database instead of trusting the client. `p_cash` stays in
+the function signature and is ignored, for compatibility.
+
+**The JavaScript half of 036 matters just as much as the SQL.** The database
+no longer believing the browser's number does not stop the browser showing
+the wrong one while the reading is still being typed - and the owner checks
+cash-in-hand against notes in a drawer before saving, so a screen a paisa off
+from the books is its own small betrayal even though the database would now
+save the correct figure regardless. `saleAmount()` in `format-helpers.js` is
+the exact-arithmetic replacement (scale litres by 1000, rate by 100,
+multiply as integers, round the paisa half away from zero - matching
+Postgres's `round()`), and it replaces the old `roundMoney(litres * rate)` at
+every call site that shows or checks a sale figure before saving: `actions.js`
+(`saveReading`'s guard and message), `ReadingForm.js` (the live total while
+typing), `LubricantSaleForm.js` (the amount the litres box fills in).
+
+**Found and fixed along the way: the reference's own `helpers.js` has a
+duplicate export.** Its "the offline build's catch-up list" round
+(`5fd9025`) added `export { ..., saleAmount } from './format-helpers'` while
+an older, imprecise `export function saleAmount(litres, ratePerLitre)` was
+still sitting further down the same file - re-exporting a name and declaring
+it again in one module is a `SyntaxError: Duplicate export 'saleAmount'`,
+confirmed by importing the file directly with Node rather than guessing from
+the read. **This is a bug in the reference repo, not something to replicate.**
+Never pushed there per this repo's own rule (read-only); worth flagging to
+whoever next has main open on that side. The offline port here does the
+correct thing: the old imprecise `saleAmount` in this repo's `helpers.js` is
+removed outright, and the single re-export from `format-helpers.js` stands
+alone.
+
+**The migration files are numbered `036`/`037` with no gap**, not `037`/`038`
+as they were first written (matching the reference's own `052`/`050`, in the
+order the offline build needed them rather than the reference's chronology).
+A first pass left `036` unused by mistake; renamed and every citing comment
+fixed - `bootstrap-db.js` sorts filenames alphabetically so a gap would not
+have broken anything, but every other run of migrations here is contiguous
+and there was no reason to make this one different.
+
+### App layer
+
+- **`ClearOldActivityButton.js`** (new, copied verbatim) - the dialog on
+  Activity: four whole retention periods, each saying how many entries it
+  would remove before it is chosen, the last month never offered, disabled
+  outright when nothing is old enough yet.
+- **`getActivityTrimCounts()`** (`data-service.js`) and **`clearOldActivity()`**
+  (`actions.js`) - the read and the write behind that dialog, on the `pg`
+  driver rather than PostgREST, otherwise the same shape as the reference.
+- **`AdminSidebar.js`** gains `ActiveMark` - a short dark bar at the end of
+  whichever nav row is open, because the tinted band alone washes out on a
+  cheap tablet in daylight. Applied at both places the reference adds it
+  (the section list and the Account row) without disturbing the Backup nav
+  entry or the licence-derived business name this build already carries that
+  the reference does not.
+- **`Dialog.js`** gains a `size="xl"` variant (64rem), for a table wide
+  enough that `lg` only fits it by giving up its own padding.
+- **`DailyTableDialog.js`** (new, copied verbatim) and **`DownloadNotice.js`**
+  (new, copied verbatim) - the Reports page's "day by day" table moves from a
+  `<details>` block under the charts to a button above them opening a modal,
+  and the Excel-export failure banner now clears its own query parameter
+  instead of outliving the failure it describes (a bug the reference found on
+  its own backup panel, then noticed the Excel export had carried since it
+  shipped). `DownloadNotice` is wired to `export_error` only - **not** to any
+  backup-download parameter, since this build's Backup section works
+  differently and was left alone entirely, per instruction.
+
+### How this round was verified
+
+Same discipline as the second catch-up: a real `embedded-postgres` cluster,
+built fresh, every migration applied in order, then seeded and driven through
+Playwright and real Chromium.
+
+- **All 37 migrations apply cleanly** from empty, each in its own transaction.
+- **The exact paisa case reproduces the fix, not just the theory**: the
+  owner's real numbers from the reference's bug report - opening
+  1,990,670.61, closing 1,990,868.36, diesel at Rs 371.90 - saved through
+  `create_nozzle_reading` and came back with `cash_amount` = `sale_amount` =
+  **73543.23**, matching Postgres's own `round((closing - opening) * rate, 2)`
+  computed independently in the same session. The reading rendered on screen
+  as Rs 73,543 (whole-rupee display), consistent with the database.
+- **Every changed and touched screen rendered clean at 1440 and 400px**
+  (Readings, Treasury, Reports, Activity), asserted against the same failure
+  family as every prior round, and looked at, not just asserted on: the
+  `DailyTableDialog` opens at the wide `xl` size with the nine-column table
+  readable with no sideways scroll; Treasury's balance walks correctly
+  through a never-negative chain (170,000 opening + 30,000 in − 45,000 out =
+  155,000); Activity's "Clear old entries" button is correctly *disabled*
+  when the seed has nothing old enough to remove, which the trim-count RPC
+  confirmed independently (`0` removable at every one of the four periods,
+  because everything seeded is today's date).
+- **`ActiveMark` visible** on the active nav row in the rendered screenshots,
+  beside the Backup entry and licence-derived name this build carries that
+  the reference does not.
+
+What this round does **not** cover, same as every round before it: writing
+through the UI (mutations exercised via SQL/RPC, not by filling in forms),
+and anything Electron-, installer- or Windows-specific. The "Clear old
+entries" dialog's actual delete path (as opposed to the disabled state) was
+not exercised, because the seed has nothing old enough to trigger it - worth
+doing on a copy with an artificially back-dated `activity_log` before this
+ships, the same caution the reference's own verification note gives.
+
 ## What's built
 
 1. **Data model** (`db/migrations/001-009`) - full port of the reference
